@@ -77,7 +77,7 @@ def get_initial_seeds(api_key):
     headers = {
         "Authorization": f"Bearer {api_key}", 
         "Accept": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
     try:
         url = "https://api.brawlstars.com/v1/rankings/global/players"
@@ -91,7 +91,12 @@ def get_initial_seeds(api_key):
     return []
 
 def harvest_rooms(api_key, duration):
-    headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+   def harvest_rooms(api_key, duration):
+    headers = {
+        "Authorization": f"Bearer {api_key}", 
+        "Accept": "application/json", 
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
     player_queue = set()
     visited_players = set()
     seen_battles = set()
@@ -186,7 +191,12 @@ def harvest_rooms(api_key, duration):
     log_message("✅ 模式 A 任務完畢！")
 
 def harvest_solo(api_key, duration):
-    headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+   def harvest_solo(api_key, duration):
+    headers = {
+        "Authorization": f"Bearer {api_key}", 
+        "Accept": "application/json", 
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
     player_queue = set()
     visited_players = set()
     seen_battles = set()
@@ -278,10 +288,17 @@ def generate_csv(data, mode):
     return output.getvalue()
 
 def background_harvest_worker(api_key, duration, mode):
-    """背景獨立執行緒管家"""
+    """背景獨立執行緒管家：終極瀏覽器偽裝版"""
+    # 🌟 加上終極偽裝標頭 (User-Agent)，假裝我們是真實的 Chrome 瀏覽器
+    headers = {
+        "Authorization": f"Bearer {api_key}", 
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+
     try:
         if mode == "rooms":
-            harvest_rooms(api_key, duration)
+            harvest_rooms(api_key, duration) # 記得把有更新 headers 的邏輯帶進子函式裡
         else:
             harvest_solo(api_key, duration)
     except Exception as e:
