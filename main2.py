@@ -22,13 +22,13 @@ from collections import defaultdict
 st.set_page_config(page_title="👑 K将軍 荒野戰術大廳", layout="wide", page_icon="🏆")
 
 # ================= 1. 全域快取記憶體 (Session State) =================
-# 【🔑 雙金鑰共用變數】
 if "gemini_api_key" not in st.session_state:
     st.session_state.gemini_api_key = ""
 if "bs_api_key" not in st.session_state:
     st.session_state.bs_api_key = ""
+if "user_ip" not in st.session_state:
+    st.session_state.user_ip = ""  # 🌟 用來儲存你要帶入的 IP
 
-# 【收割機專用變數】
 if "is_running" not in st.session_state:
     st.session_state.is_running = False
 if "data" not in st.session_state:
@@ -46,7 +46,6 @@ if "duration" not in st.session_state:
 if "export_filename" not in st.session_state:
     st.session_state.export_filename = "brawl_data.csv"
 
-# 【BP 指示器專用變數】
 if "condensed_data" not in st.session_state:
     st.session_state.condensed_data = {}
 if "mode_map_dict" not in st.session_state:
@@ -77,17 +76,6 @@ for k in draft_keys:
 
 
 # ================= 2. 核心邏輯函式庫 =================
-# ----------------- 🌟 IP 偵測小精靈 -----------------
-@st.cache_data(ttl=3600)
-def get_public_ip():
-    """獲取目前執行環境的對外 Public IP"""
-    try:
-        return requests.get("https://api.ipify.org", timeout=5).text
-    except:
-        return "無法偵測 IP"
-
-
-# ----------------- (A) 收割機專用函式 (背景化改造) -----------------
 def log_message(msg):
     st.session_state.logs.append(msg)
     print(f"[LOG] {msg}")
@@ -104,7 +92,7 @@ def get_initial_seeds(headers):
             ]
         elif res.status_code == 403:
             log_message(
-                f"❌ 嚴重錯誤 (403)：API 拒絕存取！請確認您的 IP ({get_public_ip()}) 已加入白名單。"
+                f"❌ 嚴重錯誤 (403)：API 拒絕存取！請確認您帶入的 IP ({st.session_state.user_ip}) 是否有效。"
             )
     except Exception as e:
         log_message(f"⚠️ 獲取種子玩家失敗: {str(e)}")
@@ -239,17 +227,16 @@ def harvest_rooms(headers, duration):
                         )
                 elif prof_res.status_code == 403:
                     log_message(
-                        f"❌ 嚴重錯誤 (403)：API 拒絕存取！請確保您的 IP ({get_public_ip()}) 已加入白名單。"
+                        f"❌ 嚴重錯誤 (403)：API 拒絕存取！(帶入的 IP: {st.session_state.user_ip})"
                     )
                     st.session_state.is_running = False
                     break
                 elif prof_res.status_code == 429:
                     log_message("⚠️ API 速率限制，等待 5 秒...")
                     time.sleep(5)
-            # 🌟 重點防呆：抓取對戰紀錄被擋 IP 時，立刻中斷！
             elif res.status_code == 403:
                 log_message(
-                    f"❌ 嚴重錯誤 (403)：API 存取被拒絕！請確保目前的 IP ({get_public_ip()}) 已加入白名單。"
+                    f"❌ 嚴重錯誤 (403)：API 存取被拒絕！(帶入的 IP: {st.session_state.user_ip})"
                 )
                 st.session_state.is_running = False
                 break
@@ -297,15 +284,10 @@ def harvest_solo(headers, duration):
         visited_players.add(current_tag)
         raw_tag = current_tag.replace("%23", "#")
         try:
-            proxies = {
-                "http": "http://你的跳板IP:Port",
-                "https": "http://你的跳板IP:Port",
-            }
             res = requests.get(
                 f"https://api.brawlstars.com/v1/players/{current_tag}/battlelog",
                 headers=headers,
                 timeout=10,
-                proxies=proxies,
             )
             if res.status_code == 200:
                 data = res.json().get("items", [])
@@ -365,17 +347,16 @@ def harvest_solo(headers, duration):
                                 stats[mode][map_name][brawler_name]["wins"] += 1
                 elif prof_res.status_code == 403:
                     log_message(
-                        f"❌ 嚴重錯誤 (403)：API 拒絕存取！請確保您的 IP ({get_public_ip()}) 已加入白名單。"
+                        f"❌ 嚴重錯誤 (403)：API 拒絕存取！(帶入的 IP: {st.session_state.user_ip})"
                     )
                     st.session_state.is_running = False
                     break
                 elif prof_res.status_code == 429:
                     log_message("⚠️ API 速率限制，等待 5 秒...")
                     time.sleep(5)
-            # 🌟 重點防呆
             elif res.status_code == 403:
                 log_message(
-                    f"❌ 嚴重錯誤 (403)：API 存取被拒絕！請確保目前的 IP ({get_public_ip()}) 已加入白名單。"
+                    f"❌ 嚴重錯誤 (403)：API 存取被拒絕！(帶入的 IP: {st.session_state.user_ip})"
                 )
                 st.session_state.is_running = False
                 break
@@ -423,10 +404,15 @@ def generate_csv(data, mode):
 
 def background_harvest_worker():
     """背景獨立執行緒管家"""
+    # 🌟 在這裡將輸入的 IP 帶入 Headers 中
     headers = {
         "Authorization": f"Bearer {st.session_state.bs_api_key}",
         "Accept": "application/json",
     }
+    if st.session_state.user_ip:
+        headers["X-Forwarded-For"] = st.session_state.user_ip
+        headers["X-Real-IP"] = st.session_state.user_ip
+
     try:
         if st.session_state.scraper_mode == "rooms":
             harvest_rooms(headers, st.session_state.duration)
@@ -523,32 +509,33 @@ def process_multiple_csv_files(uploaded_files):
 def render_home():
     """🏠 首頁大廳"""
     st.title("🏆 K将軍 荒野亂鬥戰術大廳")
-    st.markdown(
-        "歡迎來到終極戰術大廳！請在下方輸入您的兩把專屬 API 金鑰。**系統會自動將它們分配給對應的子系統。**"
-    )
+    st.markdown("歡迎來到終極戰術大廳！請在下方設定您的 API 金鑰。")
 
     col1, col2 = st.columns(2)
     with col1:
         st.info("⚙️ **排位收割機專用**")
         bs_input = st.text_input(
-            "🔑 Brawl Stars API Key (Supercell 官方核發)",
-            type="password",
-            value=st.session_state.bs_api_key,
+            "🔑 Brawl Stars API Key", type="password", value=st.session_state.bs_api_key
         )
         if bs_input != st.session_state.bs_api_key:
             st.session_state.bs_api_key = bs_input
             st.success("Brawl Stars 金鑰已綁定！")
 
-        # 🌟 貼心的 IP 顯示防呆機制
-        current_ip = get_public_ip()
-        st.warning(
-            f"⚠️ **API IP 綁定提示**\n\nBrawl Stars 官方會阻擋未註冊的 IP。請確認您在申請金鑰時，已將本機/伺服器的對外 IP 加入白名單：\n\n👉 **`{current_ip}`**"
+        # 🌟 直接帶入 IP 的極簡設計
+        st.markdown("##### 🌐 偽裝帶入 IP 設定")
+        ip_input = st.text_input(
+            "請輸入您要帶入 Header 的 IP：",
+            value=st.session_state.user_ip,
+            placeholder="例如: 114.34.56.78",
         )
+        if ip_input != st.session_state.user_ip:
+            st.session_state.user_ip = ip_input
+            st.rerun()
 
     with col2:
         st.info("🧠 **BP AI 分析專用**")
         gemini_input = st.text_input(
-            "🔑 Google Gemini API Key (Google AI Studio 核發)",
+            "🔑 Google Gemini API Key",
             type="password",
             value=st.session_state.gemini_api_key,
         )
