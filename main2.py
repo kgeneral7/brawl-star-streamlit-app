@@ -1,7 +1,14 @@
 import sys
 import asyncio
 import os
+import socket
 from dotenv import load_dotenv
+
+# 🛡️ 究極防護一：強制 Requests 永遠只准走 IPv4！(阻絕 IPv6 幽靈連線)
+import urllib3.util.connection as urllib3_cn
+def allowed_gai_family():
+    return socket.AF_INET
+urllib3_cn.allowed_gai_family = allowed_gai_family
 
 # 🔧 載入環境變數檔 (.env)
 load_dotenv()
@@ -25,9 +32,12 @@ from collections import defaultdict
 st.set_page_config(page_title="👑 K将軍 荒野戰術大廳", layout="wide", page_icon="🏆")
 
 # ================= 1. 全域快取記憶體 (Session State) =================
-# 🌟 混合模式：Brawl Stars 從 .env 讀取，Gemini 留空等待手動輸入
+# 🛡️ 究極防護二：暴力清洗金鑰 (把不小心加進去的雙引號、單引號、換行全部砍掉)
+raw_bs_key = os.getenv("BRAWL_STARS_API_KEY", "")
+safe_bs_key = raw_bs_key.replace('"', '').replace("'", "").strip()
+
 if 'gemini_api_key' not in st.session_state: st.session_state.gemini_api_key = ""
-if 'bs_api_key' not in st.session_state: st.session_state.bs_api_key = os.getenv("BRAWL_STARS_API_KEY", "")
+if 'bs_api_key' not in st.session_state: st.session_state.bs_api_key = safe_bs_key
 
 if 'is_running' not in st.session_state: st.session_state.is_running = False
 if 'data' not in st.session_state: st.session_state.data = []
@@ -51,32 +61,36 @@ def log_message(msg):
     st.session_state.logs.append(msg)
     print(f"[LOG] {msg}")
 
-def get_initial_seeds(headers):
+def get_initial_seeds(api_key):
     log_message("🌱 正在初始化種子玩家名單...")
+    
+    # 重新組裝最純淨的 Headers
+    headers = {
+        "Authorization": f"Bearer {api_key}", 
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+    }
+    
     try:
         url = "https://api.brawlstars.com/v1/rankings/global/players"
-        
-        # 🌟 針對初始化名單的請求，也加上瀏覽器偽裝
-        seed_headers = headers.copy()
-        seed_headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        
-        res = requests.get(url, headers=seed_headers, params={"limit": 50}, timeout=10)
+        res = requests.get(url, headers=headers, params={"limit": 50}, timeout=10)
         if res.status_code == 200:
             return [p.get('tag').replace('#', '%23') for p in res.json().get('items', [])]
         elif res.status_code == 403:
-            log_message(f"❌ 嚴重錯誤 (403)：API 拒絕存取！請確認 Supercell 後台是否綁定目前的對外 IP。")
+            log_message(f"❌ 嚴重錯誤 (403)：API 拒絕存取！")
     except Exception as e:
         log_message(f"⚠️ 獲取種子玩家失敗: {str(e)}")
     return []
 
-def harvest_rooms(headers, duration):
+def harvest_rooms(api_key, duration):
+    headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
     player_queue = set()
     visited_players = set()
     seen_battles = set()
     end_time = datetime.now() + timedelta(minutes=duration)
     log_message(f"🚀 【模式 A：神仙房間陣容版】啟動！預計執行到: {end_time.strftime('%H:%M:%S')}")
     
-    seeds = get_initial_seeds(headers)
+    seeds = get_initial_seeds(api_key)
     if not seeds:
         log_message("❌ 無法取得種子玩家，收割機強制停止。")
         st.session_state.is_running = False
@@ -175,14 +189,15 @@ def harvest_rooms(headers, duration):
         if len(player_queue) > 10000: player_queue = set(random.sample(list(player_queue), 5000))
     log_message("✅ 模式 A 任務完畢！")
 
-def harvest_solo(headers, duration):
+def harvest_solo(api_key, duration):
+    headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
     player_queue = set()
     visited_players = set()
     seen_battles = set()
     end_time = datetime.now() + timedelta(minutes=duration)
     log_message(f"🚀 【模式 B：絕頂單人英雄勝率】啟動！預計執行到: {end_time.strftime('%H:%M:%S')}")
     
-    seeds = get_initial_seeds(headers)
+    seeds = get_initial_seeds(api_key)
     if not seeds:
         log_message("❌ 無法取得種子玩家，收割機強制停止。")
         st.session_state.is_running = False
@@ -276,20 +291,21 @@ def generate_csv(data, mode):
     writer.writerows(data)
     return output.getvalue()
 
-def background_harvest_worker():
-    """背景獨立執行緒管家：終極瀏覽器偽裝版"""
-    # 🌟 加上終極偽裝標頭 (User-Agent)，假裝我們是真實的 Chrome 瀏覽器
-    headers = {
-        "Authorization": f"Bearer {st.session_state.bs_api_key}", 
-        "Accept": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
-
+def background_harvest_worker(api_key, duration, mode):
+    """背景獨立執行緒管家：參數直接傳遞版"""
     try:
-        if st.session_state.scraper_mode == "rooms":
-            harvest_rooms(headers, st.session_state.duration)
+        # 🕵️‍♂️ 印出檢查：讓我們看看傳進來的金鑰到底正不正常！
+        key_len = len(api_key)
+        if key_len > 10:
+            preview = f"{api_key[:5]}...{api_key[-5:]}"
+            log_message(f"🕵️‍♂️ [系統檢查] 使用中的金鑰長度: {key_len} 字元, 預覽: {preview}")
         else:
-            harvest_solo(headers, st.session_state.duration)
+            log_message(f"🕵️‍♂️ [系統檢查] 警告：金鑰長度異常 ({key_len} 字元)")
+            
+        if mode == "rooms":
+            harvest_rooms(api_key, duration)
+        else:
+            harvest_solo(api_key, duration)
     except Exception as e:
         log_message(f"❌ 發生未預期的錯誤: {str(e)}")
     finally:
@@ -427,7 +443,11 @@ def render_scraper():
                 st.session_state.export_filename = f"brawl_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
                 
                 ctx = get_script_run_ctx()
-                t = threading.Thread(target=background_harvest_worker)
+                # 🌟 改版重點：直接把參數傳進去，不讓它依賴 Thread 裡面的環境變數
+                t = threading.Thread(
+                    target=background_harvest_worker, 
+                    args=(st.session_state.bs_api_key, st.session_state.duration, st.session_state.scraper_mode)
+                )
                 add_script_run_ctx(t, ctx)
                 t.start()
                 st.rerun()
