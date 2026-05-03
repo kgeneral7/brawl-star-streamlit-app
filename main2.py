@@ -32,13 +32,25 @@ from collections import defaultdict
 st.set_page_config(page_title="👑 K将軍 荒野戰術大廳", layout="wide", page_icon="🏆")
 
 # ================= 1. 全域快取記憶體 (Session State) =================
-# 🛡️ 究極防護二：暴力清洗金鑰 (把不小心加進去的雙引號、單引號、換行全部砍掉)
-raw_bs_key = os.getenv("BRAWL_STARS_API_KEY", "")
+
+# 🛡️ 究極防護二：雙管齊下讀取金鑰 (支援本機 .env 與雲端 Secrets)
+raw_bs_key = ""
+try:
+    # 優先嘗試讀取 Streamlit 雲端的 Secrets
+    raw_bs_key = st.secrets["BRAWL_STARS_API_KEY"]
+except:
+    # 如果雲端沒有，強制讀取本機的 .env (加入 override=True 強制覆蓋舊系統變數)
+    load_dotenv(override=True)
+    raw_bs_key = os.getenv("BRAWL_STARS_API_KEY", "")
+
+# 暴力清洗金鑰 (把不小心加進去的雙引號、單引號、換行全部砍掉)
 safe_bs_key = raw_bs_key.replace('"', '').replace("'", "").strip()
 
-if 'gemini_api_key' not in st.session_state: st.session_state.gemini_api_key = ""
-if 'bs_api_key' not in st.session_state: st.session_state.bs_api_key = safe_bs_key
+# 💥 打破快取綁架：每次都強制更新金鑰，絕對不讓空的快取卡死！
+st.session_state.bs_api_key = safe_bs_key
 
+# 剩下的設定照舊...
+if 'gemini_api_key' not in st.session_state: st.session_state.gemini_api_key = ""
 if 'is_running' not in st.session_state: st.session_state.is_running = False
 if 'data' not in st.session_state: st.session_state.data = []
 if 'solo_stats' not in st.session_state: st.session_state.solo_stats = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: {'played': 0, 'wins': 0})))
