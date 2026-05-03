@@ -68,7 +68,7 @@ def get_initial_seeds(api_key):
     headers = {
         "Authorization": f"Bearer {api_key}", 
         "Accept": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
     }
     
     try:
@@ -77,13 +77,13 @@ def get_initial_seeds(api_key):
         if res.status_code == 200:
             return [p.get('tag').replace('#', '%23') for p in res.json().get('items', [])]
         elif res.status_code == 403:
-            log_message(f"❌ 嚴重錯誤 (403)：API 拒絕存取！")
+            log_message(f"❌ 嚴重錯誤 (403)：API 拒絕存取！(請確認 IP 與金鑰狀態)")
     except Exception as e:
         log_message(f"⚠️ 獲取種子玩家失敗: {str(e)}")
     return []
 
 def harvest_rooms(api_key, duration):
-    headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
     player_queue = set()
     visited_players = set()
     seen_battles = set()
@@ -190,7 +190,7 @@ def harvest_rooms(api_key, duration):
     log_message("✅ 模式 A 任務完畢！")
 
 def harvest_solo(api_key, duration):
-    headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+    headers = {"Authorization": f"Bearer {api_key}", "Accept": "application/json", "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
     player_queue = set()
     visited_players = set()
     seen_battles = set()
@@ -294,14 +294,6 @@ def generate_csv(data, mode):
 def background_harvest_worker(api_key, duration, mode):
     """背景獨立執行緒管家：參數直接傳遞版"""
     try:
-        # 🕵️‍♂️ 印出檢查：讓我們看看傳進來的金鑰到底正不正常！
-        key_len = len(api_key)
-        if key_len > 10:
-            preview = f"{api_key[:5]}...{api_key[-5:]}"
-            log_message(f"🕵️‍♂️ [系統檢查] 使用中的金鑰長度: {key_len} 字元, 預覽: {preview}")
-        else:
-            log_message(f"🕵️‍♂️ [系統檢查] 警告：金鑰長度異常 ({key_len} 字元)")
-            
         if mode == "rooms":
             harvest_rooms(api_key, duration)
         else:
@@ -391,6 +383,21 @@ def render_home():
         st.info("⚙️ **排位收割機專用**")
         if st.session_state.bs_api_key:
             st.success("✅ Brawl Stars 金鑰已由 `.env` 成功載入！")
+            
+            # 🕵️‍♂️ 新增的 X 光透視儀：讓你直接看清金鑰的真面目
+            key_len = len(st.session_state.bs_api_key)
+            if key_len > 10:
+                preview = f"{st.session_state.bs_api_key[:5]}...{st.session_state.bs_api_key[-5:]}"
+            else:
+                preview = "金鑰過短或無效"
+                
+            with st.expander("🕵️‍♂️ 點我展開：檢查載入的金鑰狀態"):
+                st.markdown(f"- **總長度：** `{key_len}` 字元")
+                st.markdown(f"- **首尾預覽：** `{preview}`")
+                if key_len < 100:
+                    st.error("⚠️ 警告：這串金鑰長度看起來太短了，可能沒有完整複製！")
+                elif st.session_state.bs_api_key.startswith('"') or st.session_state.bs_api_key.endswith('"'):
+                    st.error("⚠️ 警告：金鑰前後被包了雙引號，這是錯的！")
         else:
             st.error("❌ 未偵測到 Brawl Stars 金鑰，請檢查 `.env` 檔案。")
         
@@ -443,7 +450,6 @@ def render_scraper():
                 st.session_state.export_filename = f"brawl_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
                 
                 ctx = get_script_run_ctx()
-                # 🌟 改版重點：直接把參數傳進去，不讓它依賴 Thread 裡面的環境變數
                 t = threading.Thread(
                     target=background_harvest_worker, 
                     args=(st.session_state.bs_api_key, st.session_state.duration, st.session_state.scraper_mode)
