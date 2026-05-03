@@ -960,4 +960,3 @@ elif page == "🚀 排位數據收割機":
     render_scraper()
 elif page == "🤖 BP 即時戰術指示器":
     render_bp()
-# 完成
