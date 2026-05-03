@@ -15,8 +15,10 @@ from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ct
 
 # 🌟 全域防護鎖 (保護跨執行緒共享的變數)
 GLOBAL_LOCK = threading.Lock()
+# 🌟 網路閘門鎖 (防止多核心微秒級突波)
+API_LOCK = threading.Lock()
 
-# 🛡️ 究極防護一：強制 Requests 永遠只准走 IPv4！
+# 🛡️ 究極防護一：強制 Requests 永遠只准走 IPv4！[cite: 1]
 import urllib3.util.connection as urllib3_cn
 def allowed_gai_family(): return socket.AF_INET
 urllib3_cn.allowed_gai_family = allowed_gai_family
@@ -25,16 +27,14 @@ urllib3_cn.allowed_gai_family = allowed_gai_family
 st.set_page_config(page_title="👑 K将軍 荒野戰術大廳", layout="wide", page_icon="🏆")
 
 # ================= 0. 系統安全驗證 (密碼鎖) =================
-# 嘗試從 Secrets 讀取密碼，若未設定則提供預設密碼 "KGeneral2026" 避免系統崩潰
 try:
     SYSTEM_PASSWORD = st.secrets["APP_PASSWORD"]
 except:
-    SYSTEM_PASSWORD = "KGeneral2026" # 預設密碼 (英數組合)
+    SYSTEM_PASSWORD = "KGeneral2026" 
 
 if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
 
-# 🔒 如果未登入，顯示密碼輸入畫面並阻斷後續程式碼執行
 if not st.session_state.authenticated:
     st.title("🔒 K将軍 戰術大廳 - 系統鎖定")
     st.markdown("請輸入專屬密碼以啟動系統核心。")
@@ -50,26 +50,21 @@ if not st.session_state.authenticated:
                 st.rerun()
             else:
                 st.error("❌ 密碼錯誤，拒絕存取！")
-    
     st.stop()
 
-
 # ================= 1. 全域快取記憶體 (Session State) =================
-# 嘗試從 Secrets 讀取預設值
 raw_bs_key = ""
-try: raw_bs_key = st.secrets["BRAWL_STARS_API_KEY"]
+try: raw_bs_key = st.secrets["BRAWL_STARS_API_KEY"] #[cite: 1]
 except: pass
 safe_bs_key = raw_bs_key.replace('"', '').replace("'", "").strip()
 
 raw_gem_key = ""
-try: raw_gem_key = st.secrets["GEMINI_API_KEY"]
+try: raw_gem_key = st.secrets["GEMINI_API_KEY"] #[cite: 1]
 except: pass
 
-# 初始化狀態
 if 'bs_api_key' not in st.session_state: st.session_state.bs_api_key = safe_bs_key
 if 'gemini_api_key' not in st.session_state: st.session_state.gemini_api_key = raw_gem_key
 
-# 【收割機專用變數：多核心資料流分離】
 if 'is_running' not in st.session_state: st.session_state.is_running = False
 if 'active_tasks' not in st.session_state: st.session_state.active_tasks = 0
 if 'rooms_data' not in st.session_state: st.session_state.rooms_data = [] 
@@ -78,7 +73,7 @@ if 'solo_data' not in st.session_state: st.session_state.solo_data = []
 if 'logs' not in st.session_state: st.session_state.logs = []
 if 'scraper_modes' not in st.session_state: st.session_state.scraper_modes = ["rooms"]
 if 'duration' not in st.session_state: st.session_state.duration = 60
-if 'worker_count' not in st.session_state: st.session_state.worker_count = 2
+if 'worker_count' not in st.session_state: st.session_state.worker_count = 8 
 if 'export_filename' not in st.session_state: st.session_state.export_filename = "brawl_data"
 
 if 'condensed_data' not in st.session_state: st.session_state.condensed_data = {}
@@ -90,21 +85,27 @@ draft_keys = ["ep1", "ep2", "ep3", "ap1", "ap2", "ap3", "eb1", "eb2", "eb3", "ab
 for k in draft_keys:
     if k not in st.session_state: st.session_state[k] = ""
 
-# ================= 2. 核心邏輯函式庫 (多核心架構) =================
+# ================= 2. 核心邏輯函式庫 =================
 def log_message(msg):
     with GLOBAL_LOCK:
         st.session_state.logs.append(msg)
     print(f"[LOG] {msg}")
 
+# 🛡️ 新增：多核心網路閘門 (防止並發突波)
+def safe_requests_get(url, headers, timeout=10):
+    with API_LOCK:
+        time.sleep(0.05) # 強制讓每個網路請求之間有 50 毫秒的安全間隔
+        return requests.get(url, headers=headers, timeout=timeout)
+
 def get_initial_seeds(headers, mode_tag):
     log_message(f"🌱 {mode_tag} 正在初始化種子玩家名單...")
     try:
         url = "https://api.brawlstars.com/v1/rankings/global/players"
-        res = requests.get(url, headers=headers, params={"limit": 50}, timeout=10)
+        res = safe_requests_get(url, headers=headers, timeout=10)
         if res.status_code == 200:
             return [p.get('tag').replace('#', '%23') for p in res.json().get('items', [])]
         elif res.status_code == 403:
-            log_message(f"❌ {mode_tag} 嚴重錯誤 (403)：API 拒絕存取！請確認有將首頁掃描到的 IP 加進金鑰白名單中。")
+            log_message(f"❌ {mode_tag} 嚴重錯誤 (403)：API 拒絕存取！")
     except Exception as e:
         log_message(f"⚠️ {mode_tag} 獲取種子玩家失敗: {str(e)}")
     return []
@@ -146,7 +147,8 @@ def harvest_rooms(headers, duration, worker_count, ctx):
                     log_message(f"⏱️ {mode_tag} 陣容數: {len(st.session_state.rooms_data)} | 待查: {q.qsize()} 人 | 耗時: {elapsed:.1f}分")
 
             try:
-                res = requests.get(f"https://api.brawlstars.com/v1/players/{current_tag}/battlelog", headers=headers, timeout=10)
+                # 替換為安全請求閘門
+                res = safe_requests_get(f"https://api.brawlstars.com/v1/players/{current_tag}/battlelog", headers=headers, timeout=10)
                 if res.status_code == 200:
                     data = res.json().get('items', [])
                     new_tags = []
@@ -171,9 +173,12 @@ def harvest_rooms(headers, duration, worker_count, ctx):
                     win_rate = (w_count / b_count * 100) if b_count > 0 else 0
                     if win_rate < 75:
                         q.task_done()
+                        time.sleep(random.uniform(0.1, 0.5)) 
                         continue
                     
-                    prof_res = requests.get(f"https://api.brawlstars.com/v1/players/{current_tag}", headers=headers, timeout=10)
+                    time.sleep(random.uniform(0.1, 0.3))
+
+                    prof_res = safe_requests_get(f"https://api.brawlstars.com/v1/players/{current_tag}", headers=headers, timeout=10)
                     if prof_res.status_code == 200 and prof_res.json().get('3vs3Victories', 0) >= 5000:
                         elite_found += 1
                         if elite_found % 3 == 0:
@@ -223,19 +228,18 @@ def harvest_rooms(headers, duration, worker_count, ctx):
                                 })
                     elif prof_res.status_code == 403:
                         with GLOBAL_LOCK: st.session_state.is_running = False
-                        log_message(f"❌ {mode_tag} API拒絕存取(403)！")
+                        log_message(f"❌ {mode_tag} Profile API拒絕存取(403)！")
                     elif prof_res.status_code == 429:
                         time.sleep(5)
                 elif res.status_code == 403:
                     with GLOBAL_LOCK: st.session_state.is_running = False
-                    log_message(f"❌ {mode_tag} API拒絕存取(403)！")
+                    log_message(f"❌ {mode_tag} Battlelog API拒絕存取(403)！")
                 elif res.status_code == 429:
                     time.sleep(5)
             except Exception: pass
 
             q.task_done()
-            # 🔥 極限偽裝：每次執行完都休息隨機 0.1 ~ 2.0 秒，包含精細小數點
-            time.sleep(random.uniform(0.1, 2.0))
+            time.sleep(random.uniform(0.1, 0.5))
 
         with GLOBAL_LOCK:
             st.session_state.active_tasks -= 1
@@ -247,8 +251,7 @@ def harvest_rooms(headers, duration, worker_count, ctx):
         t = threading.Thread(target=worker, args=(i,))
         add_script_run_ctx(t, ctx)
         t.start()
-        # 🔥 核心啟動時也加入隨機延遲 (0.5 ~ 1.5 秒)，避免瞬間一起發出第一波請求
-        time.sleep(random.uniform(0.5, 1.5))
+        time.sleep(random.uniform(0.5, 1.0))
 
 def harvest_solo(headers, duration, worker_count, ctx):
     mode_tag = "[模式 B]"
@@ -289,7 +292,7 @@ def harvest_solo(headers, duration, worker_count, ctx):
                     log_message(f"⏱️ {mode_tag} 勝率樣本: {total_samples} 筆 | 待查: {q.qsize()} 人 | 耗時: {elapsed:.1f}分")
 
             try:
-                res = requests.get(f"https://api.brawlstars.com/v1/players/{current_tag}/battlelog", headers=headers, timeout=10)
+                res = safe_requests_get(f"https://api.brawlstars.com/v1/players/{current_tag}/battlelog", headers=headers, timeout=10)
                 if res.status_code == 200:
                     data = res.json().get('items', [])
                     new_tags = []
@@ -313,9 +316,12 @@ def harvest_solo(headers, duration, worker_count, ctx):
                     win_rate = (w_count / b_count * 100) if b_count > 0 else 0
                     if win_rate < 75:
                         q.task_done()
+                        time.sleep(random.uniform(0.1, 0.5))
                         continue
                     
-                    prof_res = requests.get(f"https://api.brawlstars.com/v1/players/{current_tag}", headers=headers, timeout=10)
+                    time.sleep(random.uniform(0.1, 0.3))
+
+                    prof_res = safe_requests_get(f"https://api.brawlstars.com/v1/players/{current_tag}", headers=headers, timeout=10)
                     if prof_res.status_code == 200 and prof_res.json().get('3vs3Victories', 0) >= 5000:
                         elite_found += 1
                         if elite_found % 3 == 0:
@@ -345,19 +351,18 @@ def harvest_solo(headers, duration, worker_count, ctx):
                                     if result == 'victory': stats[mode][map_name][brawler_name]['wins'] += 1
                     elif prof_res.status_code == 403:
                         with GLOBAL_LOCK: st.session_state.is_running = False
-                        log_message(f"❌ {mode_tag} API拒絕存取(403)！")
+                        log_message(f"❌ {mode_tag} Profile API拒絕存取(403)！")
                     elif prof_res.status_code == 429:
                         time.sleep(5)
                 elif res.status_code == 403:
                     with GLOBAL_LOCK: st.session_state.is_running = False
-                    log_message(f"❌ {mode_tag} API拒絕存取(403)！")
+                    log_message(f"❌ {mode_tag} Battlelog API拒絕存取(403)！")
                 elif res.status_code == 429:
                     time.sleep(5)
             except Exception: pass
 
             q.task_done()
-            # 🔥 極限偽裝：每次執行完都休息隨機 0.1 ~ 2.0 秒，包含精細小數點
-            time.sleep(random.uniform(0.1, 2.0))
+            time.sleep(random.uniform(0.1, 0.5))
 
         with GLOBAL_LOCK:
             st.session_state.active_tasks -= 1
@@ -369,8 +374,7 @@ def harvest_solo(headers, duration, worker_count, ctx):
         t = threading.Thread(target=worker, args=(i,))
         add_script_run_ctx(t, ctx)
         t.start()
-        # 🔥 核心啟動時也加入隨機延遲 (0.5 ~ 1.5 秒)
-        time.sleep(random.uniform(0.5, 1.5))
+        time.sleep(random.uniform(0.5, 1.0))
 
 def generate_csv(data, mode):
     if not data: return ""
@@ -531,9 +535,9 @@ def render_scraper():
 
         st.divider()
         st.header("⚡ 效能壓榨引擎")
-        w_count = st.slider("🚀 併發核心數 (每個模式的分配量)", min_value=1, max_value=4, value=st.session_state.worker_count, step=1)
+        w_count = st.slider("🚀 併發核心數 (每個模式的分配量)", min_value=1, max_value=16, value=st.session_state.worker_count, step=1)
         st.session_state.worker_count = w_count
-        st.caption("⚠️ 核心數開越高抓越快，但過高容易觸發官方 `429` 封鎖，建議維持在 1~2 之間。")
+        st.caption("⚠️ 核心數開越高抓越快，建議維持在 4~8 之間。")
 
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -552,10 +556,11 @@ def render_scraper():
                 st.session_state.start_time = datetime.now()
                 st.session_state.export_filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
                 
+                # 🛡️ 關鍵修復：完全還原原版 main3.py 的 User-Agent 標頭
                 headers = {
                     "Authorization": f"Bearer {st.session_state.bs_api_key}", 
                     "Accept": "application/json",
-                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
                 }
                 ctx = get_script_run_ctx()
                 
