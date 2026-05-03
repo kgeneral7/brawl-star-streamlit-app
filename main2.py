@@ -1,21 +1,6 @@
 import sys
-import asyncio
 import os
 import socket
-
-# 🛡️ 究極防護一：強制 Requests 永遠只准走 IPv4！(阻絕 IPv6 幽靈連線導致的 403)
-import urllib3.util.connection as urllib3_cn
-def allowed_gai_family():
-    return socket.AF_INET
-urllib3_cn.allowed_gai_family = allowed_gai_family
-
-# 🔧 終極防護：徹底消滅 Windows 系統上惱人的 WinError 10054 報錯
-if sys.platform == 'win32':
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-
-import streamlit as st
-import threading
-from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
 import requests
 import time
 import csv
@@ -23,33 +8,31 @@ import random
 import io
 from datetime import datetime, timedelta
 from collections import defaultdict
+import streamlit as st
 
-# 🛡️ 嘗試載入 dotenv (加了 try-except，這樣上傳雲端也不會崩潰)
-try:
-    from dotenv import load_dotenv
-    load_dotenv(override=True)
-except ImportError:
-    pass
+# 🛡️ 究極防護一：強制 Requests 永遠只准走 IPv4！(阻絕 IPv6 幽靈連線導致的 403)
+import urllib3.util.connection as urllib3_cn
+def allowed_gai_family(): return socket.AF_INET
+urllib3_cn.allowed_gai_family = allowed_gai_family
 
 # ================= 網頁基本設定 =================
 st.set_page_config(page_title="👑 K将軍 荒野戰術大廳", layout="wide", page_icon="🏆")
 
 # ================= 1. 全域快取記憶體 (Session State) =================
-# 🛡️ 雙管齊下讀取金鑰 (優先讀取雲端 Secrets，沒有再讀取本機 .env)
+# 🌟 暴力讀取雲端 Secrets (專為 Streamlit Cloud 設計)
 raw_bs_key = ""
-try:
-    raw_bs_key = st.secrets["BRAWL_STARS_API_KEY"]
-except:
-    raw_bs_key = os.getenv("BRAWL_STARS_API_KEY", "")
-
-# 暴力清洗金鑰 (把不小心加進去的雙引號、單引號、換行全部砍掉)
+try: raw_bs_key = st.secrets["BRAWL_STARS_API_KEY"]
+except: pass
 safe_bs_key = raw_bs_key.replace('"', '').replace("'", "").strip()
 
-# 💥 打破快取綁架：每次重整都強制寫入最新金鑰！
-st.session_state.bs_api_key = safe_bs_key
+raw_gem_key = ""
+try: raw_gem_key = st.secrets["GEMINI_API_KEY"]
+except: pass
 
-# 其他必要變數初始化
-if 'gemini_api_key' not in st.session_state: st.session_state.gemini_api_key = ""
+st.session_state.bs_api_key = safe_bs_key
+if 'gemini_api_key' not in st.session_state: st.session_state.gemini_api_key = raw_gem_key
+
+# 其他狀態變數
 if 'is_running' not in st.session_state: st.session_state.is_running = False
 if 'data' not in st.session_state: st.session_state.data = []
 if 'solo_stats' not in st.session_state: st.session_state.solo_stats = defaultdict(lambda: defaultdict(lambda: defaultdict(lambda: {'played': 0, 'wins': 0})))
@@ -57,7 +40,6 @@ if 'logs' not in st.session_state: st.session_state.logs = []
 if 'scraper_mode' not in st.session_state: st.session_state.scraper_mode = "rooms"
 if 'duration' not in st.session_state: st.session_state.duration = 60
 if 'export_filename' not in st.session_state: st.session_state.export_filename = "brawl_data.csv"
-
 if 'condensed_data' not in st.session_state: st.session_state.condensed_data = {}
 if 'mode_map_dict' not in st.session_state: st.session_state.mode_map_dict = defaultdict(set)
 if 'all_brawlers' not in st.session_state: st.session_state.all_brawlers = set()
@@ -67,13 +49,16 @@ draft_keys = ["ep1", "ep2", "ep3", "ap1", "ap2", "ap3", "eb1", "eb2", "eb3", "ab
 for k in draft_keys:
     if k not in st.session_state: st.session_state[k] = ""
 
-# ================= 2. 核心邏輯函式庫 =================
-def log_message(msg):
+# ================= 2. 核心邏輯函式庫 (無 Threading 版) =================
+def log_message(msg, log_container):
+    """🌟 使用你 app.py 的魔法：直接在主執行緒中更新 UI[cite: 1]"""
     st.session_state.logs.append(msg)
     print(f"[LOG] {msg}")
+    if log_container:
+        log_container.code("\n".join(st.session_state.logs[-25:]), language="plaintext")
 
-def get_initial_seeds(api_key):
-    log_message("🌱 正在初始化種子玩家名單...")
+def get_initial_seeds(api_key, log_container):
+    log_message("🌱 正在初始化種子玩家名單...", log_container)
     headers = {
         "Authorization": f"Bearer {api_key}", 
         "Accept": "application/json",
@@ -85,13 +70,12 @@ def get_initial_seeds(api_key):
         if res.status_code == 200:
             return [p.get('tag').replace('#', '%23') for p in res.json().get('items', [])]
         elif res.status_code == 403:
-            log_message(f"❌ 嚴重錯誤 (403)：API 拒絕存取！請確認 IP 是否正確。")
+            log_message(f"❌ 嚴重錯誤 (403)：API 拒絕存取！(若在雲端，請確認已將雲端 IP 加白名單)", log_container)
     except Exception as e:
-        log_message(f"⚠️ 獲取種子玩家失敗: {str(e)}")
+        log_message(f"⚠️ 獲取種子玩家失敗: {str(e)}", log_container)
     return []
 
-def harvest_rooms(api_key, duration):
-   def harvest_rooms(api_key, duration):
+def harvest_rooms(api_key, duration, log_container):
     headers = {
         "Authorization": f"Bearer {api_key}", 
         "Accept": "application/json", 
@@ -101,11 +85,11 @@ def harvest_rooms(api_key, duration):
     visited_players = set()
     seen_battles = set()
     end_time = datetime.now() + timedelta(minutes=duration)
-    log_message(f"🚀 【模式 A：神仙房間陣容版】啟動！預計執行到: {end_time.strftime('%H:%M:%S')}")
+    log_message(f"🚀 【模式 A：神仙房間陣容版】啟動！預計執行到: {end_time.strftime('%H:%M:%S')}", log_container)
     
-    seeds = get_initial_seeds(api_key)
+    seeds = get_initial_seeds(api_key, log_container)
     if not seeds:
-        log_message("❌ 無法取得種子玩家，收割機強制停止。")
+        log_message("❌ 無法取得種子玩家，收割機強制停止。", log_container)
         st.session_state.is_running = False
         return
 
@@ -117,7 +101,7 @@ def harvest_rooms(api_key, duration):
         iteration_count += 1
         if iteration_count % 5 == 0:
             elapsed_time = (datetime.now() - st.session_state.start_time).seconds / 60
-            log_message(f"⏱️ 進度: {iteration_count} 玩家已檢查 | 精英玩家: {elite_found} | 累積對戰數: {len(st.session_state.data)} | 已用時間: {elapsed_time:.1f}分鐘")
+            log_message(f"⏱️ 進度: {iteration_count} 玩家已檢查 | 精英玩家: {elite_found} | 累積對戰數: {len(st.session_state.data)} | 已用時間: {elapsed_time:.1f}分鐘", log_container)
         current_tag = random.choice(list(player_queue))
         player_queue.remove(current_tag)
         visited_players.add(current_tag)
@@ -145,7 +129,7 @@ def harvest_rooms(api_key, duration):
                 prof_res = requests.get(f"https://api.brawlstars.com/v1/players/{current_tag}", headers=headers, timeout=10)
                 if prof_res.status_code == 200 and prof_res.json().get('3vs3Victories', 0) >= 5000:
                     elite_found += 1
-                    log_message(f"[{datetime.now().strftime('%H:%M:%S')}] 🏆 找到神仙 {raw_tag}！")
+                    log_message(f"[{datetime.now().strftime('%H:%M:%S')}] 🏆 找到神仙 {raw_tag}！", log_container)
                     for item in data:
                         battle = item.get('battle', {})
                         if battle.get('type') not in ['soloRanked', 'teamRanked']: continue
@@ -188,10 +172,9 @@ def harvest_rooms(api_key, duration):
         except Exception: pass
         time.sleep(0.3)
         if len(player_queue) > 10000: player_queue = set(random.sample(list(player_queue), 5000))
-    log_message("✅ 模式 A 任務完畢！")
+    log_message("✅ 模式 A 任務完畢！", log_container)
 
-def harvest_solo(api_key, duration):
-   def harvest_solo(api_key, duration):
+def harvest_solo(api_key, duration, log_container):
     headers = {
         "Authorization": f"Bearer {api_key}", 
         "Accept": "application/json", 
@@ -201,11 +184,11 @@ def harvest_solo(api_key, duration):
     visited_players = set()
     seen_battles = set()
     end_time = datetime.now() + timedelta(minutes=duration)
-    log_message(f"🚀 【模式 B：絕頂單人英雄勝率】啟動！預計執行到: {end_time.strftime('%H:%M:%S')}")
+    log_message(f"🚀 【模式 B：絕頂單人英雄勝率】啟動！預計執行到: {end_time.strftime('%H:%M:%S')}", log_container)
     
-    seeds = get_initial_seeds(api_key)
+    seeds = get_initial_seeds(api_key, log_container)
     if not seeds:
-        log_message("❌ 無法取得種子玩家，收割機強制停止。")
+        log_message("❌ 無法取得種子玩家，收割機強制停止。", log_container)
         st.session_state.is_running = False
         return
 
@@ -218,7 +201,7 @@ def harvest_solo(api_key, duration):
         iteration_count += 1
         if iteration_count % 5 == 0:
             elapsed_time = (datetime.now() - st.session_state.start_time).seconds / 60
-            log_message(f"⏱️ 進度: {iteration_count} 玩家已檢查 | 精英玩家: {elite_found} | 已用時間: {elapsed_time:.1f}分鐘")
+            log_message(f"⏱️ 進度: {iteration_count} 玩家已檢查 | 精英玩家: {elite_found} | 已用時間: {elapsed_time:.1f}分鐘", log_container)
         current_tag = random.choice(list(player_queue))
         player_queue.remove(current_tag)
         visited_players.add(current_tag)
@@ -246,7 +229,7 @@ def harvest_solo(api_key, duration):
                 prof_res = requests.get(f"https://api.brawlstars.com/v1/players/{current_tag}", headers=headers, timeout=10)
                 if prof_res.status_code == 200 and prof_res.json().get('3vs3Victories', 0) >= 5000:
                     elite_found += 1
-                    log_message(f"[{datetime.now().strftime('%H:%M:%S')}] 🏆 大神 {raw_tag}！")
+                    log_message(f"[{datetime.now().strftime('%H:%M:%S')}] 🏆 大神 {raw_tag}！", log_container)
                     for item in data:
                         battle = item.get('battle', {})
                         if battle.get('type') not in ['soloRanked', 'teamRanked']: continue
@@ -272,7 +255,7 @@ def harvest_solo(api_key, duration):
         except Exception: pass
         time.sleep(0.3)
         if len(player_queue) > 10000: player_queue = set(random.sample(list(player_queue), 5000))
-    log_message("✅ 模式 B 任務完畢！")
+    log_message("✅ 模式 B 任務完畢！", log_container)
 
 def generate_csv(data, mode):
     if not data: return ""
@@ -287,26 +270,7 @@ def generate_csv(data, mode):
     writer.writerows(data)
     return output.getvalue()
 
-def background_harvest_worker(api_key, duration, mode):
-    """背景獨立執行緒管家：終極瀏覽器偽裝版"""
-    # 🌟 加上終極偽裝標頭 (User-Agent)，假裝我們是真實的 Chrome 瀏覽器
-    headers = {
-        "Authorization": f"Bearer {api_key}", 
-        "Accept": "application/json",
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
-
-    try:
-        if mode == "rooms":
-            harvest_rooms(api_key, duration) # 記得把有更新 headers 的邏輯帶進子函式裡
-        else:
-            harvest_solo(api_key, duration)
-    except Exception as e:
-        log_message(f"❌ 發生未預期的錯誤: {str(e)}")
-    finally:
-        st.session_state.is_running = False
-
-# ----------------- (B) BP 指示器專用函式 -----------------
+# BP 專用檔案處理略...
 def process_multiple_csv_files(uploaded_files):
     if not uploaded_files: return False
     temp_condensed = defaultdict(lambda: defaultdict(dict))
@@ -375,22 +339,18 @@ def process_multiple_csv_files(uploaded_files):
     st.success(f"✅ 成功融合疊加 {total_files_processed} 份報表！巨量數據已寫入超光速快取。")
     return True
 
+
 # ================= 3. 各頁面渲染模組 =================
 def render_home():
     st.title("🏆 K将軍 荒野亂鬥戰術大廳")
     st.markdown("歡迎來到終極戰術大廳！")
-    
     col1, col2 = st.columns(2)
     with col1:
         st.info("⚙️ **排位收割機狀態**")
         if st.session_state.bs_api_key:
-            st.success("✅ Brawl Stars 金鑰已由 `.env` 或 Secrets 成功載入！")
-            key_len = len(st.session_state.bs_api_key)
-            if key_len > 10:
-                preview = f"{st.session_state.bs_api_key[:5]}...{st.session_state.bs_api_key[-5:]}"
-                st.markdown(f"*(已綁定 {key_len} 字元金鑰: `{preview}`)*")
+            st.success("✅ Brawl Stars 金鑰已載入！")
         else:
-            st.error("❌ 未偵測到 Brawl Stars 金鑰，請檢查 `.env` 檔案。")
+            st.error("❌ 未偵測到 Brawl Stars 金鑰，請在 Streamlit Cloud 的 Secrets 設定。")
             
     with col2:
         st.info("🧠 **BP AI 分析狀態**")
@@ -398,11 +358,10 @@ def render_home():
         if gemini_input != st.session_state.gemini_api_key:
             st.session_state.gemini_api_key = gemini_input.strip()
             st.rerun()
-            
         if st.session_state.gemini_api_key:
             st.success("✅ Gemini 金鑰已準備就緒！")
         else:
-            st.warning("⚠️ 請貼上您的 Gemini 金鑰，完成後按下 Enter 鍵。")
+            st.warning("⚠️ 請貼上您的 Gemini 金鑰。")
 
     st.divider()
     col_a, col_b = st.columns(2)
@@ -424,9 +383,10 @@ def render_scraper():
 
     col1, col2, col3 = st.columns(3)
     with col1:
+        # 🌟 改回你原本的寫法，啟動時只做「狀態標記」並重整
         if st.button("▶️ 啟動收割機", disabled=st.session_state.is_running, use_container_width=True):
             if not st.session_state.bs_api_key:
-                st.error("系統未讀取到 Brawl Stars API Key，請檢查 `.env`！")
+                st.error("系統未讀取到 Brawl Stars API Key！")
             else:
                 st.session_state.is_running = True
                 st.session_state.data = []
@@ -434,14 +394,6 @@ def render_scraper():
                 st.session_state.logs = []
                 st.session_state.start_time = datetime.now()
                 st.session_state.export_filename = f"brawl_data_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-                
-                ctx = get_script_run_ctx()
-                t = threading.Thread(
-                    target=background_harvest_worker, 
-                    args=(st.session_state.bs_api_key, st.session_state.duration, st.session_state.scraper_mode)
-                )
-                add_script_run_ctx(t, ctx)
-                t.start()
                 st.rerun()
     with col2:
         if st.button("⏹️ 緊急停止並保留資料", disabled=not st.session_state.is_running, use_container_width=True, type="primary"):
@@ -456,11 +408,23 @@ def render_scraper():
 
     st.divider()
 
+    # 🌟 完全依賴主執行緒運作，不呼叫 Threading[cite: 1]
     if st.session_state.is_running:
-        st.info("🔄 收割機背景全速運作中...")
-        st.code("\n".join(st.session_state.logs[-25:]), language="plaintext")
-        time.sleep(1.5)
-        st.rerun()
+        st.info("🔄 正在全速運算中... (隨時可點擊上方藍色按鈕緊急煞車)")
+        log_container = st.empty()
+        log_container.code("\n".join(st.session_state.logs[-25:]), language="plaintext")
+        
+        try:
+            if st.session_state.scraper_mode == "rooms":
+                harvest_rooms(st.session_state.bs_api_key, st.session_state.duration, log_container)
+            else:
+                harvest_solo(st.session_state.bs_api_key, st.session_state.duration, log_container)
+        except Exception as e:
+            log_message(f"❌ 發生未預期的錯誤: {str(e)}", log_container)
+        finally:
+            st.session_state.is_running = False
+            st.rerun()
+
     elif not st.session_state.is_running and st.session_state.logs:
         st.markdown("### 📝 上次執行日誌")
         st.code("\n".join(st.session_state.logs[-25:]), language="plaintext")
