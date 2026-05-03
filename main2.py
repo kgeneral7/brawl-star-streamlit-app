@@ -26,8 +26,6 @@ if "gemini_api_key" not in st.session_state:
     st.session_state.gemini_api_key = ""
 if "bs_api_key" not in st.session_state:
     st.session_state.bs_api_key = ""
-if "user_ip" not in st.session_state:
-    st.session_state.user_ip = ""  # 🌟 用來儲存你要帶入的 IP
 
 if "is_running" not in st.session_state:
     st.session_state.is_running = False
@@ -91,9 +89,7 @@ def get_initial_seeds(headers):
                 p.get("tag").replace("#", "%23") for p in res.json().get("items", [])
             ]
         elif res.status_code == 403:
-            log_message(
-                f"❌ 嚴重錯誤 (403)：API 拒絕存取！請確認您帶入的 IP ({st.session_state.user_ip}) 是否有效。"
-            )
+            log_message(f"❌ 嚴重錯誤 (403)：API 拒絕存取！(請確認金鑰是否輸入正確)")
     except Exception as e:
         log_message(f"⚠️ 獲取種子玩家失敗: {str(e)}")
     return []
@@ -226,18 +222,14 @@ def harvest_rooms(headers, duration):
                             }
                         )
                 elif prof_res.status_code == 403:
-                    log_message(
-                        f"❌ 嚴重錯誤 (403)：API 拒絕存取！(帶入的 IP: {st.session_state.user_ip})"
-                    )
+                    log_message(f"❌ 嚴重錯誤 (403)：API 拒絕存取！")
                     st.session_state.is_running = False
                     break
                 elif prof_res.status_code == 429:
                     log_message("⚠️ API 速率限制，等待 5 秒...")
                     time.sleep(5)
             elif res.status_code == 403:
-                log_message(
-                    f"❌ 嚴重錯誤 (403)：API 存取被拒絕！(帶入的 IP: {st.session_state.user_ip})"
-                )
+                log_message(f"❌ 嚴重錯誤 (403)：API 存取被拒絕！")
                 st.session_state.is_running = False
                 break
             elif res.status_code == 429:
@@ -346,18 +338,14 @@ def harvest_solo(headers, duration):
                             if result == "victory":
                                 stats[mode][map_name][brawler_name]["wins"] += 1
                 elif prof_res.status_code == 403:
-                    log_message(
-                        f"❌ 嚴重錯誤 (403)：API 拒絕存取！(帶入的 IP: {st.session_state.user_ip})"
-                    )
+                    log_message(f"❌ 嚴重錯誤 (403)：API 拒絕存取！")
                     st.session_state.is_running = False
                     break
                 elif prof_res.status_code == 429:
                     log_message("⚠️ API 速率限制，等待 5 秒...")
                     time.sleep(5)
             elif res.status_code == 403:
-                log_message(
-                    f"❌ 嚴重錯誤 (403)：API 存取被拒絕！(帶入的 IP: {st.session_state.user_ip})"
-                )
+                log_message(f"❌ 嚴重錯誤 (403)：API 存取被拒絕！")
                 st.session_state.is_running = False
                 break
             elif res.status_code == 429:
@@ -403,15 +391,12 @@ def generate_csv(data, mode):
 
 
 def background_harvest_worker():
-    """背景獨立執行緒管家"""
-    # 🌟 在這裡將輸入的 IP 帶入 Headers 中
+    """背景獨立執行緒管家：用最乾淨的方式發送請求"""
+    # 🌟 完全移除任何干擾 Header，只留最純淨的金鑰
     headers = {
         "Authorization": f"Bearer {st.session_state.bs_api_key}",
         "Accept": "application/json",
     }
-    if st.session_state.user_ip:
-        headers["X-Forwarded-For"] = st.session_state.user_ip
-        headers["X-Real-IP"] = st.session_state.user_ip
 
     try:
         if st.session_state.scraper_mode == "rooms":
@@ -517,20 +502,15 @@ def render_home():
         bs_input = st.text_input(
             "🔑 Brawl Stars API Key", type="password", value=st.session_state.bs_api_key
         )
-        if bs_input != st.session_state.bs_api_key:
-            st.session_state.bs_api_key = bs_input
-            st.success("Brawl Stars 金鑰已綁定！")
 
-        # 🌟 直接帶入 IP 的極簡設計
-        st.markdown("##### 🌐 偽裝帶入 IP 設定")
-        ip_input = st.text_input(
-            "請輸入您要帶入 Header 的 IP：",
-            value=st.session_state.user_ip,
-            placeholder="例如: 114.34.56.78",
-        )
-        if ip_input != st.session_state.user_ip:
-            st.session_state.user_ip = ip_input
-            st.rerun()
+        # ⚠️ 防呆機制：輸入金鑰後一定要按 Enter！
+        if bs_input != st.session_state.bs_api_key:
+            st.session_state.bs_api_key = (
+                bs_input.strip()
+            )  # 自動幫你過濾掉前後不小心複製到的空白
+            st.success("✅ Brawl Stars 金鑰已綁定！")
+
+        st.markdown("*(貼上金鑰後請按 Enter 確認)*")
 
     with col2:
         st.info("🧠 **BP AI 分析專用**")
@@ -540,8 +520,10 @@ def render_home():
             value=st.session_state.gemini_api_key,
         )
         if gemini_input != st.session_state.gemini_api_key:
-            st.session_state.gemini_api_key = gemini_input
-            st.success("Gemini 金鑰已綁定！")
+            st.session_state.gemini_api_key = gemini_input.strip()
+            st.success("✅ Gemini 金鑰已綁定！")
+
+        st.markdown("*(貼上金鑰後請按 Enter 確認)*")
 
     st.divider()
     st.markdown("### 🧭 系統導覽")
