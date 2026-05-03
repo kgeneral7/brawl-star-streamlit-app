@@ -17,9 +17,9 @@ from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ct
 GLOBAL_LOCK = threading.Lock()
 
 # 🛡️ 究極防護一：強制 Requests 永遠只准走 IPv4！(阻絕 IPv6 幽靈連線導致的 403)
-import urllib3.util.connection as urllib3_cn
-def allowed_gai_family(): return socket.AF_INET
-urllib3_cn.allowed_gai_family = allowed_gai_family
+#import urllib3.util.connection as urllib3_cn
+#def allowed_gai_family(): return socket.AF_INET
+#urllib3_cn.allowed_gai_family = allowed_gai_family
 
 # ================= 網頁基本設定 =================
 st.set_page_config(page_title="👑 K将軍 荒野戰術大廳", layout="wide", page_icon="🏆")
