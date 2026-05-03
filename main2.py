@@ -55,7 +55,12 @@ def get_initial_seeds(headers):
     log_message("🌱 正在初始化種子玩家名單...")
     try:
         url = "https://api.brawlstars.com/v1/rankings/global/players"
-        res = requests.get(url, headers=headers, params={"limit": 50}, timeout=10)
+        
+        # 🌟 針對初始化名單的請求，也加上瀏覽器偽裝
+        seed_headers = headers.copy()
+        seed_headers["User-Agent"] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        
+        res = requests.get(url, headers=seed_headers, params={"limit": 50}, timeout=10)
         if res.status_code == 200:
             return [p.get('tag').replace('#', '%23') for p in res.json().get('items', [])]
         elif res.status_code == 403:
@@ -272,10 +277,12 @@ def generate_csv(data, mode):
     return output.getvalue()
 
 def background_harvest_worker():
-    """背景獨立執行緒管家"""
+    """背景獨立執行緒管家：終極瀏覽器偽裝版"""
+    # 🌟 加上終極偽裝標頭 (User-Agent)，假裝我們是真實的 Chrome 瀏覽器
     headers = {
         "Authorization": f"Bearer {st.session_state.bs_api_key}", 
-        "Accept": "application/json"
+        "Accept": "application/json",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
     try:
