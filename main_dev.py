@@ -106,6 +106,7 @@ def harvest_rooms(headers, duration, worker_count, ctx):
             with data_lock:
                 if current_tag in visited:
                     q.task_done()
+                    time.sleep(0.3)  # 原本只休息 0.3 秒
                     continue
                 visited.add(current_tag)
 
@@ -143,6 +144,7 @@ def harvest_rooms(headers, duration, worker_count, ctx):
                     win_rate = (w_count / b_count * 100) if b_count > 0 else 0
                     if win_rate < 75:
                         q.task_done()
+                        time.sleep(0.3)  # 原本只休息 0.3 秒
                         continue
                     
                     prof_res = requests.get(f"https://api.brawlstars.com/v1/players/{current_tag}", headers=headers, timeout=10)
@@ -248,6 +250,7 @@ def harvest_solo(headers, duration, worker_count, ctx):
             with data_lock:
                 if current_tag in visited:
                     q.task_done()
+                    time.sleep(0.3)  # 原本只休息 0.3 秒
                     continue
                 visited.add(current_tag)
 
@@ -285,6 +288,7 @@ def harvest_solo(headers, duration, worker_count, ctx):
                     win_rate = (w_count / b_count * 100) if b_count > 0 else 0
                     if win_rate < 75:
                         q.task_done()
+                        time.sleep(0.3)  # 原本只休息 0.3 秒
                         continue
                     
                     prof_res = requests.get(f"https://api.brawlstars.com/v1/players/{current_tag}", headers=headers, timeout=10)
