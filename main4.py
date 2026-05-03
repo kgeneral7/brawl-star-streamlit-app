@@ -79,7 +79,7 @@ if 'solo_data' not in st.session_state: st.session_state.solo_data = []
 if 'logs' not in st.session_state: st.session_state.logs = []
 if 'scraper_modes' not in st.session_state: st.session_state.scraper_modes = ["rooms"]
 if 'duration' not in st.session_state: st.session_state.duration = 60
-if 'worker_count' not in st.session_state: st.session_state.worker_count = 8 
+if 'worker_count' not in st.session_state: st.session_state.worker_count = 6 
 if 'export_filename' not in st.session_state: st.session_state.export_filename = "brawl_data"
 
 if 'condensed_data' not in st.session_state: st.session_state.condensed_data = {}
@@ -506,7 +506,7 @@ def render_home():
     col_a, col_b = st.columns(2)
     with col_a:
         st.subheader("🚀 排位數據收割機 (多核併發版)")
-        st.write("在背景全自動巡邏神仙房。全新加入**執行緒池 (Thread Pool)** 技術，支援最高 16 核心平行收割！")
+        st.write("在背景全自動巡邏神仙房。全新加入**執行緒池 (Thread Pool)** 技術，支援最高 12心平行收割！")
     with col_b:
         st.subheader("🤖 BP 即時戰術指示器")
         st.write("載入收割機產出的 CSV，提供超光速的選角與 Ban 角建議。")
@@ -528,7 +528,7 @@ def render_scraper():
 
         st.divider()
         st.header("⚡ 效能壓榨引擎")
-        w_count = st.slider("🚀 併發核心數 (每個模式的分配量)", min_value=1, max_value=16, value=st.session_state.worker_count, step=1)
+        w_count = st.slider("🚀 併發核心數 (每個模式的分配量)", min_value=1, max_value=12, value=st.session_state.worker_count, step=1)
         st.session_state.worker_count = w_count
         st.caption("⚠️ 核心數開越高抓越快，但過高容易觸發官方 `429` 封鎖，建議維持在 4~8 之間。")
 
