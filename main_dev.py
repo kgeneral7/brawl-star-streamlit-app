@@ -340,6 +340,8 @@ def harvest_solo(headers, duration, worker_count, ctx):
         t = threading.Thread(target=worker, args=(i,))
         add_script_run_ctx(t, ctx)
         t.start()
+         # 🌟 緩步發射核心執行緒，避免瞬間觸發防駭客機制
+        time.sleep(1.5)  # 🔥 新增這行！讓每個核心啟動前先等 1 秒，不要同時開砲！
 
 def generate_csv(data, mode):
     if not data: return ""
