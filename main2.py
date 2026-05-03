@@ -345,15 +345,26 @@ def render_home():
     st.title("🏆 K将軍 荒野亂鬥戰術大廳")
     st.markdown("歡迎來到終極戰術大廳！")
     
-    # 🌟 雲端 IP 探測雷達 (專為 Streamlit Cloud 破解 403 設計)
+  # 🌟 雲端 IP 探測雷達 (深度掃描版)
     st.divider()
     st.subheader("📡 系統網路狀態 (破解 403 專用)")
-    with st.spinner("正在探測雲端伺服器的真實對外 IP..."):
+    with st.spinner("正在對雲端伺服器進行深度 IP 掃描 (約需 3 秒)..."):
         try:
-            # 讓伺服器自己連出去看自己的 IP
-            current_ip = requests.get("https://api.ipify.org?format=text", timeout=5).text
-            st.success(f"✅ 抓到了！本系統目前的對外 IP 為： **{current_ip}**")
-            st.warning(f"⚠️ 【破解 403 必做】：請立刻前往 Supercell Developer 後台，建立一把新的 API Key，並將上面的 IP `{current_ip}` 填入白名單中。然後把新的 Key 更新到 Streamlit 的 Secrets 裡！")
+            ip_pool = set()
+            # 連續發送 3 次請求，嘗試逼出所有隱藏的出口 IP
+            for _ in range(3):
+                current_ip = requests.get("https://api.ipify.org?format=text", timeout=5).text
+                ip_pool.add(current_ip)
+                time.sleep(0.5) # 稍微暫停一下再測
+            
+            st.success("✅ 深度掃描完成！發現以下對外 IP：")
+            
+            # 將所有發現的 IP 印出來
+            for ip in ip_pool:
+                st.code(ip, language="plaintext")
+                
+            st.warning("⚠️ 【破解 403 必做】：請立刻前往 Supercell Developer 後台建立一把新的 API Key。**請務必將上面列出的「所有」IP 都加入白名單！** (每個 IP 佔一行)。然後把新的 Key 更新到 Streamlit 的 Secrets 裡！")
+            
         except Exception as e:
             st.error(f"❌ 無法探測 IP：{e}")
     st.divider()
