@@ -1,14 +1,29 @@
-import requests
+import streamlit as st
+import socket
+from urllib.parse import urlparse
 
-# ⚠️ 請將下方雙引號內的文字，換成你的 Brawl Stars API Key
-API_KEY = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzUxMiIsImtpZCI6IjI4YTMxOGY3LTAwMDAtYTFlYi03ZmExLTJjNzQzM2M2Y2NhNSJ9.eyJpc3MiOiJzdXBlcmNlbGwiLCJhdWQiOiJzdXBlcmNlbGw6Z2FtZWFwaSIsImp0aSI6IjYwMGZjN2Y0LWUxOGMtNDNkMi1iNTZjLWFiMjA5MjZmYjRiNSIsImlhdCI6MTc3Nzc3MDU0OSwic3ViIjoiZGV2ZWxvcGVyLzU1Y2JlNTBhLTJhN2UtN2VhYy0wYzBmLTZmYmQyN2VlOTE2OSIsInNjb3BlcyI6WyJicmF3bHN0YXJzIl0sImxpbWl0cyI6W3sidGllciI6ImRldmVsb3Blci9zaWx2ZXIiLCJ0eXBlIjoidGhyb3R0bGluZyJ9LHsiY2lkcnMiOlsiMTE4LjE2Ny4xOTUuMTc5Il0sInR5cGUiOiJjbGllbnQifV19.a2Vllplbyz1UpuA3WiJvBehsI_UDqLUt9g3O-pUnZQNhfu2qwRk9DKhb4q0Ipk3rm-sJCC69RH2SmbLZ86fRmg"
+st.title("🌐 神搜：網址轉 IP 解析器")
+st.write("輸入任何網址（例如你的 Streamlit 雲端網址），我幫你把底層 IP 挖出來！")
 
-headers = {"Authorization": f"Bearer {API_KEY}", "Accept": "application/json"}
+# 1. 建立輸入框
+url_input = st.text_input("🔗 請輸入網址 (URL)：", placeholder="例如：https://my-app.streamlit.app 或 google.com")
 
-print("📡 正在向 Supercell 發送 X 光測試連線...")
-res = requests.get(
-    "https://api.brawlstars.com/v1/rankings/global/players?limit=1", headers=headers
-)
-
-print(f"\n📊 【伺服器狀態碼】: {res.status_code}")
-print(f"💬 【官方詳細回應】: {res.text}")
+if url_input:
+    try:
+        # 2. 清洗網址：把 https:// 和後面的路徑去掉，只留核心網域
+        # 如果使用者輸入 https://google.com/search，這段會把它變成 google.com
+        domain = urlparse(url_input).netloc
+        if not domain: 
+            domain = url_input # 如果使用者沒打 https://，直接拿輸入的字
+            
+        # 3. 核心魔法：呼叫 DNS 系統查 IP
+        ip_address = socket.gethostbyname(domain)
+        
+        st.success(f"✅ 解析成功！")
+        st.markdown(f"- **目標網域：** `{domain}`")
+        st.markdown(f"- **對應 IP：** `{ip_address}`")
+        
+    except socket.gaierror:
+        st.error("❌ 解析失敗：找不到這個網址，請確認拼字是否正確（不要輸入結尾的斜線或子路徑）。")
+    except Exception as e:
+        st.error(f"❌ 發生未知的錯誤：{e}")
