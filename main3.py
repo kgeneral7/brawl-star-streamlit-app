@@ -6,10 +6,13 @@ import time
 import csv
 import random
 import io
+import threading
 from datetime import datetime, timedelta
 from collections import defaultdict
 import streamlit as st
-
+from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
+# 🌟 全域防護鎖 (保護跨執行緒共享的變數)
+GLOBAL_LOCK = threading.Lock()
 # 🛡️ 究極防護一：強制 Requests 永遠只准走 IPv4！(阻絕 IPv6 幽靈連線導致的 403)
 import urllib3.util.connection as urllib3_cn
 def allowed_gai_family(): return socket.AF_INET
@@ -17,6 +20,35 @@ urllib3_cn.allowed_gai_family = allowed_gai_family
 
 # ================= 網頁基本設定 =================
 st.set_page_config(page_title="👑 K将軍 荒野戰術大廳", layout="wide", page_icon="🏆")
+
+# ================= 0. 系統安全驗證 (密碼鎖) =================
+# 嘗試從 Secrets 讀取密碼，若未設定則提供預設密碼 "KGeneral2026" 避免系統崩潰
+try:
+    SYSTEM_PASSWORD = st.secrets["APP_PASSWORD"]
+except:
+    SYSTEM_PASSWORD = "KGeneral2026" # 預設密碼 (英數組合)
+
+if 'authenticated' not in st.session_state:
+    st.session_state.authenticated = False
+
+# 🔒 如果未登入，顯示密碼輸入畫面並阻斷後續程式碼執行
+if not st.session_state.authenticated:
+    st.title("🔒 K将軍 戰術大廳 - 系統鎖定")
+    st.markdown("請輸入專屬密碼以啟動系統核心。")
+    
+    col_pwd1, col_pwd2 = st.columns([1, 2])
+    with col_pwd1:
+        pwd_input = st.text_input("🔑 請輸入密碼", type="password")
+        if st.button("解鎖系統", type="primary", use_container_width=True):
+            if pwd_input == SYSTEM_PASSWORD:
+                st.session_state.authenticated = True
+                st.success("✅ 密碼正確，系統解鎖中...")
+                time.sleep(0.5)
+                st.rerun()
+            else:
+                st.error("❌ 密碼錯誤，拒絕存取！")
+    
+    st.stop()
 
 # ================= 1. 全域快取記憶體 (Session State) =================
 # 嘗試從 Secrets 讀取預設值（當作預填，如果沒有也沒關係）
