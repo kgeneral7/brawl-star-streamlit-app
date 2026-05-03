@@ -297,10 +297,15 @@ def harvest_solo(headers, duration):
         visited_players.add(current_tag)
         raw_tag = current_tag.replace("%23", "#")
         try:
+            proxies = {
+                "http": "http://你的跳板IP:Port",
+                "https": "http://你的跳板IP:Port",
+            }
             res = requests.get(
                 f"https://api.brawlstars.com/v1/players/{current_tag}/battlelog",
                 headers=headers,
                 timeout=10,
+                proxies=proxies,
             )
             if res.status_code == 200:
                 data = res.json().get("items", [])
