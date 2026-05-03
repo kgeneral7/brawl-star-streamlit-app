@@ -218,6 +218,8 @@ def harvest_rooms(headers, duration, worker_count, ctx):
         t = threading.Thread(target=worker, args=(i,))
         add_script_run_ctx(t, ctx)
         t.start()
+        # 🌟 緩步發射核心執行緒，避免瞬間觸發防駭客機制
+        time.sleep(1.0)  # 🔥 新增這行！讓每個核心啟動前先等 1 秒，不要同時開砲！
 
 def harvest_solo(headers, duration, worker_count, ctx):
     """【模式 B】單人勝率多核心派發中心"""
