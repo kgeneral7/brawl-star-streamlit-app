@@ -508,7 +508,7 @@ def render_scraper():
 
         st.divider()
         st.header("⚡ 效能壓榨引擎")
-        w_count = st.slider("🚀 併發核心數 (每個模式的分配量)", min_value=1, max_value=16, value=st.session_state.worker_count, step=1)
+        w_count = st.slider("🚀 併發核心數 (每個模式的分配量)", min_value=1, max_value=6, value=st.session_state.worker_count, step=1)
         st.session_state.worker_count = w_count
         st.caption("⚠️ 核心數開越高抓越快，但過高容易觸發官方 `429` 封鎖，建議維持在 4~8 之間。")
 
