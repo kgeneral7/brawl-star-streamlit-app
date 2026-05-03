@@ -48,7 +48,7 @@ if 'solo_data' not in st.session_state: st.session_state.solo_data = []   # 模�
 if 'logs' not in st.session_state: st.session_state.logs = []
 if 'scraper_modes' not in st.session_state: st.session_state.scraper_modes = ["rooms"]
 if 'duration' not in st.session_state: st.session_state.duration = 60
-if 'worker_count' not in st.session_state: st.session_state.worker_count = 8 # 預設 8 核心
+if 'worker_count' not in st.session_state: st.session_state.worker_count = 6 # 預設 6 核心
 if 'export_filename' not in st.session_state: st.session_state.export_filename = "brawl_data"
 
 if 'condensed_data' not in st.session_state: st.session_state.condensed_data = {}
@@ -510,7 +510,7 @@ def render_scraper():
         st.header("⚡ 效能壓榨引擎")
         w_count = st.slider("🚀 併發核心數 (每個模式的分配量)", min_value=1, max_value=6, value=st.session_state.worker_count, step=1)
         st.session_state.worker_count = w_count
-        st.caption("⚠️ 核心數開越高抓越快，但過高容易觸發官方 `429` 封鎖，建議維持在 4~8 之間。")
+        st.caption("⚠️ 核心數開越高抓越快，但過高容易觸發官方 `429` 封鎖，建議維持在 4~6 之間。")
 
     col1, col2, col3 = st.columns(3)
     with col1:
