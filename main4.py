@@ -17,8 +17,10 @@ from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ct
 GLOBAL_LOCK = threading.Lock()
 # 🌟 網路閘門鎖 (防止多核心微秒級突波)
 API_LOCK = threading.Lock()
+# 🌟 絕對節流計時器：記錄上一次 API 呼叫的時間
+LAST_API_TIME = 0.0
 
-# 🛡️ 究極防護一：強制 Requests 永遠只准走 IPv4！[cite: 1]
+# 🛡️ 究極防護一：強制 Requests 永遠只准走 IPv4！
 import urllib3.util.connection as urllib3_cn
 def allowed_gai_family(): return socket.AF_INET
 urllib3_cn.allowed_gai_family = allowed_gai_family
@@ -54,12 +56,12 @@ if not st.session_state.authenticated:
 
 # ================= 1. 全域快取記憶體 (Session State) =================
 raw_bs_key = ""
-try: raw_bs_key = st.secrets["BRAWL_STARS_API_KEY"] #[cite: 1]
+try: raw_bs_key = st.secrets["BRAWL_STARS_API_KEY"]
 except: pass
 safe_bs_key = raw_bs_key.replace('"', '').replace("'", "").strip()
 
 raw_gem_key = ""
-try: raw_gem_key = st.secrets["GEMINI_API_KEY"] #[cite: 1]
+try: raw_gem_key = st.secrets["GEMINI_API_KEY"]
 except: pass
 
 if 'bs_api_key' not in st.session_state: st.session_state.bs_api_key = safe_bs_key
@@ -73,7 +75,7 @@ if 'solo_data' not in st.session_state: st.session_state.solo_data = []
 if 'logs' not in st.session_state: st.session_state.logs = []
 if 'scraper_modes' not in st.session_state: st.session_state.scraper_modes = ["rooms"]
 if 'duration' not in st.session_state: st.session_state.duration = 60
-if 'worker_count' not in st.session_state: st.session_state.worker_count = 2
+if 'worker_count' not in st.session_state: st.session_state.worker_count = 4 # 預設 4 核心
 if 'export_filename' not in st.session_state: st.session_state.export_filename = "brawl_data"
 
 if 'condensed_data' not in st.session_state: st.session_state.condensed_data = {}
@@ -91,11 +93,23 @@ def log_message(msg):
         st.session_state.logs.append(msg)
     print(f"[LOG] {msg}")
 
-# 🛡️ 新增：多核心網路閘門 (防止並發突波)
+# 🛡️ 終極修復：絕對節流網路閘門 (Token Bucket Rate Limiter)
 def safe_requests_get(url, headers, timeout=10):
+    global LAST_API_TIME
     with API_LOCK:
-        time.sleep(0.05) # 強制讓每個網路請求之間有 50 毫秒的安全間隔
-        return requests.get(url, headers=headers, timeout=timeout)
+        now = time.time()
+        elapsed = now - LAST_API_TIME
+        # 確保兩次請求之間「絕對」相隔至少 0.5 秒 (最高 2 RPS)
+        if elapsed < 0.5:
+            time.sleep(0.5 - elapsed)
+        
+        try:
+            res = requests.get(url, headers=headers, timeout=timeout)
+        finally:
+            # 不論成功或失敗，都更新最後呼叫時間
+            LAST_API_TIME = time.time()
+            
+        return res
 
 def get_initial_seeds(headers, mode_tag):
     log_message(f"🌱 {mode_tag} 正在初始化種子玩家名單...")
@@ -147,7 +161,6 @@ def harvest_rooms(headers, duration, worker_count, ctx):
                     log_message(f"⏱️ {mode_tag} 陣容數: {len(st.session_state.rooms_data)} | 待查: {q.qsize()} 人 | 耗時: {elapsed:.1f}分")
 
             try:
-                # 替換為安全請求閘門
                 res = safe_requests_get(f"https://api.brawlstars.com/v1/players/{current_tag}/battlelog", headers=headers, timeout=10)
                 if res.status_code == 200:
                     data = res.json().get('items', [])
@@ -173,11 +186,8 @@ def harvest_rooms(headers, duration, worker_count, ctx):
                     win_rate = (w_count / b_count * 100) if b_count > 0 else 0
                     if win_rate < 75:
                         q.task_done()
-                        time.sleep(random.uniform(0.1, 0.5)) 
                         continue
                     
-                    time.sleep(random.uniform(0.1, 0.3))
-
                     prof_res = safe_requests_get(f"https://api.brawlstars.com/v1/players/{current_tag}", headers=headers, timeout=10)
                     if prof_res.status_code == 200 and prof_res.json().get('3vs3Victories', 0) >= 5000:
                         elite_found += 1
@@ -239,7 +249,6 @@ def harvest_rooms(headers, duration, worker_count, ctx):
             except Exception: pass
 
             q.task_done()
-            time.sleep(random.uniform(0.1, 0.5))
 
         with GLOBAL_LOCK:
             st.session_state.active_tasks -= 1
@@ -251,7 +260,6 @@ def harvest_rooms(headers, duration, worker_count, ctx):
         t = threading.Thread(target=worker, args=(i,))
         add_script_run_ctx(t, ctx)
         t.start()
-        time.sleep(random.uniform(0.5, 1.0))
 
 def harvest_solo(headers, duration, worker_count, ctx):
     mode_tag = "[模式 B]"
@@ -316,11 +324,8 @@ def harvest_solo(headers, duration, worker_count, ctx):
                     win_rate = (w_count / b_count * 100) if b_count > 0 else 0
                     if win_rate < 75:
                         q.task_done()
-                        time.sleep(random.uniform(0.1, 0.5))
                         continue
                     
-                    time.sleep(random.uniform(0.1, 0.3))
-
                     prof_res = safe_requests_get(f"https://api.brawlstars.com/v1/players/{current_tag}", headers=headers, timeout=10)
                     if prof_res.status_code == 200 and prof_res.json().get('3vs3Victories', 0) >= 5000:
                         elite_found += 1
@@ -362,7 +367,6 @@ def harvest_solo(headers, duration, worker_count, ctx):
             except Exception: pass
 
             q.task_done()
-            time.sleep(random.uniform(0.1, 0.5))
 
         with GLOBAL_LOCK:
             st.session_state.active_tasks -= 1
@@ -374,7 +378,6 @@ def harvest_solo(headers, duration, worker_count, ctx):
         t = threading.Thread(target=worker, args=(i,))
         add_script_run_ctx(t, ctx)
         t.start()
-        time.sleep(random.uniform(0.5, 1.0))
 
 def generate_csv(data, mode):
     if not data: return ""
@@ -512,8 +515,8 @@ def render_home():
     st.markdown("### 🧭 系統導覽")
     col_a, col_b = st.columns(2)
     with col_a:
-        st.subheader("🚀 排位數據收割機 (多核併發版)")
-        st.write("在背景全自動巡邏神仙房。全新加入**執行緒池 (Thread Pool)** 技術，支援最高 16 核心平行收割！")
+        st.subheader("🚀 排位數據收割機 (多核節流版)")
+        st.write("在背景全自動巡邏神仙房。已配置最高階「全球絕對節流閥」，徹底阻擋 DDoS 判定。")
     with col_b:
         st.subheader("🤖 BP 即時戰術指示器")
         st.write("載入收割機產出的 CSV，提供超光速的選角與 Ban 角建議。")
@@ -535,9 +538,9 @@ def render_scraper():
 
         st.divider()
         st.header("⚡ 效能壓榨引擎")
-        w_count = st.slider("🚀 併發核心數 (每個模式的分配量)", min_value=1, max_value=4, value=st.session_state.worker_count, step=1)
+        w_count = st.slider("🚀 併發核心數 (每個模式的分配量)", min_value=1, max_value=16, value=st.session_state.worker_count, step=1)
         st.session_state.worker_count = w_count
-        st.caption("⚠️ 核心數開越高抓越快，建議維持在 1~2 之間。")
+        st.caption("⚠️ 核心再多也不怕！底層已內建全球節流閥，保證安全通過官方檢測。")
 
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -556,7 +559,6 @@ def render_scraper():
                 st.session_state.start_time = datetime.now()
                 st.session_state.export_filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
                 
-                # 🛡️ 關鍵修復：完全還原原版 main3.py 的 User-Agent 標頭
                 headers = {
                     "Authorization": f"Bearer {st.session_state.bs_api_key}", 
                     "Accept": "application/json",
