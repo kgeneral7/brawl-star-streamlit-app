@@ -344,6 +344,20 @@ def process_multiple_csv_files(uploaded_files):
 def render_home():
     st.title("🏆 K将軍 荒野亂鬥戰術大廳")
     st.markdown("歡迎來到終極戰術大廳！")
+    
+    # 🌟 雲端 IP 探測雷達 (專為 Streamlit Cloud 破解 403 設計)
+    st.divider()
+    st.subheader("📡 系統網路狀態 (破解 403 專用)")
+    with st.spinner("正在探測雲端伺服器的真實對外 IP..."):
+        try:
+            # 讓伺服器自己連出去看自己的 IP
+            current_ip = requests.get("https://api.ipify.org?format=text", timeout=5).text
+            st.success(f"✅ 抓到了！本系統目前的對外 IP 為： **{current_ip}**")
+            st.warning(f"⚠️ 【破解 403 必做】：請立刻前往 Supercell Developer 後台，建立一把新的 API Key，並將上面的 IP `{current_ip}` 填入白名單中。然後把新的 Key 更新到 Streamlit 的 Secrets 裡！")
+        except Exception as e:
+            st.error(f"❌ 無法探測 IP：{e}")
+    st.divider()
+
     col1, col2 = st.columns(2)
     with col1:
         st.info("⚙️ **排位收割機狀態**")
@@ -363,7 +377,7 @@ def render_home():
         else:
             st.warning("⚠️ 請貼上您的 Gemini 金鑰。")
 
-    st.divider()
+    st.markdown("### 🧭 系統導覽")
     col_a, col_b = st.columns(2)
     with col_a:
         st.subheader("🚀 排位數據收割機")
