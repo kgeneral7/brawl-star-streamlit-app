@@ -857,7 +857,7 @@ def render_scraper():
 
 
 def render_bp():
-    st.title("🤖 K将军 BP 即時戰術指示器")
+    st.title("🤖 K将軍 BP 即時戰術指示器")
     with st.sidebar:
         st.header("📂 數據庫載入")
         uploaded_files = st.file_uploader(
