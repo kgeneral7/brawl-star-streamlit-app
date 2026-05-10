@@ -43,7 +43,7 @@ HTTP_SESSION.mount("http://", adapter)
 st.set_page_config(page_title="👑 K将軍 荒野戰術大廳", layout="wide", page_icon="🏆")
 
 # ================= API 設定 =================
-BASE_URL = "https://bsproxy.royaleapi.dev/v1/"
+BASE_URL = "https://bsproxy.royaleapi.dev/"
 
 # ================= 0. 系統安全驗證 (密碼鎖) =================
 try:
@@ -152,17 +152,30 @@ def log_message(msg):
 def get_initial_seeds(mode_tag):
     log_message(f"🌱 {mode_tag} 正在初始化種子玩家名單...")
     try:
-        url = f"{BASE_URL}/rankings/global/players"
+        url = f"{BASE_URL}v1/rankings/global/players"
         res = HTTP_SESSION.get(url, params={"limit": 50}, timeout=10)
+        log_message(f"🔍 {mode_tag} API 回應狀態碼: {res.status_code}")
         if res.status_code == 200:
-            return [
-                p.get("tag").replace("#", "%23") for p in res.json().get("items", [])
-            ]
-        elif res.status_code == 403:
-            log_message(f"❌ {mode_tag} 嚴重錯誤 (403)：API 拒絕存取！")
+            items = res.json().get("items", [])
+            log_message(f"✅ {mode_tag} 成功獲取 {len(items)} 個種子玩家")
+            return [p.get("tag").replace("#", "%23") for p in items]
+        else:
+            log_message(
+                f"❌ {mode_tag} API 請求失敗 (狀態碼: {res.status_code})：{res.text[:200]}"
+            )
     except Exception as e:
         log_message(f"⚠️ {mode_tag} 獲取種子玩家失敗: {str(e)}")
-    return []
+
+    # 如果 API 失敗，使用備用種子玩家
+    log_message(f"🔄 {mode_tag} 使用備用種子玩家")
+    backup_seeds = [
+        "8Q8Q2P2",  # 一些已知的玩家標籤（需要替換為真實的）
+        "9P2Q8R2",
+        "8L8Q2P2",
+        "9R2Q8P2",
+        "8Q8Q2P2",
+    ]
+    return [tag.replace("#", "%23") for tag in backup_seeds]
 
 
 def harvest_rooms(duration, worker_count, ctx):
@@ -211,7 +224,7 @@ def harvest_rooms(duration, worker_count, ctx):
             try:
                 # 🛡️ 統一使用 HTTP_SESSION 來發送請求，共用底層連線
                 res = HTTP_SESSION.get(
-                    f"{BASE_URL}/players/{current_tag}/battlelog",
+                    f"{BASE_URL}v1/players/{current_tag}/battlelog",
                     timeout=10,
                 )
                 if res.status_code == 200:
@@ -243,7 +256,7 @@ def harvest_rooms(duration, worker_count, ctx):
                         continue
 
                     prof_res = HTTP_SESSION.get(
-                        f"{BASE_URL}/players/{current_tag}",
+                        f"{BASE_URL}v1/players/{current_tag}",
                         timeout=10,
                     )
                     if (
@@ -399,7 +412,7 @@ def harvest_solo(duration, worker_count, ctx):
 
             try:
                 res = HTTP_SESSION.get(
-                    f"{BASE_URL}/players/{current_tag}/battlelog",
+                    f"{BASE_URL}v1/players/{current_tag}/battlelog",
                     timeout=10,
                 )
                 if res.status_code == 200:
@@ -430,7 +443,7 @@ def harvest_solo(duration, worker_count, ctx):
                         continue
 
                     prof_res = HTTP_SESSION.get(
-                        f"{BASE_URL}/players/{current_tag}",
+                        f"{BASE_URL}v1/players/{current_tag}",
                         timeout=10,
                     )
                     if (
@@ -733,6 +746,9 @@ def render_scraper():
                 )
 
                 # 🚀 啟動前，將原版完美的 Headers 注入到全局的連線池中
+                log_message(
+                    f"🔑 API Key 設定狀態: {'已設定' if st.session_state.bs_api_key else '未設定'}"
+                )
                 HTTP_SESSION.headers.update(
                     {
                         "Authorization": f"Bearer {st.session_state.bs_api_key}",
