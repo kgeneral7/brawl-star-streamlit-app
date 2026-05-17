@@ -1032,20 +1032,9 @@ def render_scraper():
             f"🔄 **多核心收割陣列全速運作中...** (目前有 {st.session_state.active_tasks} 個核心正在背景狂飆！)"
         )
         st.code("\n".join(st.session_state.logs[-25:]), language="plaintext")
-        st.info("⏱️ 系統將自動刷新頁面以顯示最新狀態。")
-        components.html(
-            "<div style='position:fixed; left:0; top:0; width:1px; height:1px; opacity:0; z-index:-1;'>"
-            "<script>"
-            "const reloadPage = () => {"
-            "  const target = window.top || window.parent || window;"
-            "  try { target.location.replace(target.location.href); } catch (e) { window.location.replace(window.location.href); }"
-            "};"
-            "setInterval(reloadPage, 3000);"
-            "</script>"
-            "</div>",
-            height=50,
-            scrolling=False,
-        )
+        st.info("⏱️ 系統每 3 秒自動更新目前狀態。")
+        time.sleep(3)
+        st.experimental_rerun()
 
     elif not st.session_state.is_running and st.session_state.logs:
         st.markdown("### 📝 上次執行日誌")
