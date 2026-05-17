@@ -13,6 +13,7 @@ import queue
 from datetime import datetime, timedelta
 from collections import defaultdict
 import streamlit as st
+import streamlit.components.v1 as components
 from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
 from streamlit_cookies_manager import CookieManager
 
@@ -475,6 +476,7 @@ def harvest_rooms(duration, worker_count, ctx):
         with GLOBAL_LOCK:
             st.session_state.active_tasks += 1
         t = threading.Thread(target=worker, args=(i,))
+        t.daemon = True
         add_script_run_ctx(t, ctx)
         t.start()
         time.sleep(0.1)
@@ -631,6 +633,7 @@ def harvest_solo(duration, worker_count, ctx):
         with GLOBAL_LOCK:
             st.session_state.active_tasks += 1
         t = threading.Thread(target=worker, args=(i,))
+        t.daemon = True
         add_script_run_ctx(t, ctx)
         t.start()
         time.sleep(0.1)
@@ -1029,8 +1032,11 @@ def render_scraper():
             f"🔄 **多核心收割陣列全速運作中...** (目前有 {st.session_state.active_tasks} 個核心正在背景狂飆！)"
         )
         st.code("\n".join(st.session_state.logs[-25:]), language="plaintext")
-        if st.button("🔄 手動刷新狀態", use_container_width=True):
-            st.rerun()
+        st.info("⏱️ 系統將自動刷新頁面以顯示最新狀態。")
+        components.html(
+            "<script>setTimeout(function(){window.location.reload();}, 3000);</script>",
+            height=0,
+        )
 
     elif not st.session_state.is_running and st.session_state.logs:
         st.markdown("### 📝 上次執行日誌")
