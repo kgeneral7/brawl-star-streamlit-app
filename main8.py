@@ -48,6 +48,51 @@ def parse_saved_bs_api_keys(raw_keys):
     except Exception:
         return []
 
+
+def ios_cookie_fallback(cookies_to_set: dict = None, cookies_to_delete: list = None):
+    if cookies_to_set is None:
+        cookies_to_set = {}
+    if cookies_to_delete is None:
+        cookies_to_delete = []
+    js_cookies = json.dumps(cookies_to_set)
+    js_delete = json.dumps(cookies_to_delete)
+    script = f"""
+<script>
+(function() {{
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+  if (!isIOS) {{
+    return;
+  }}
+  const parentDoc = (window.parent || window).document;
+  const setCookie = (name, value) => {{
+    const expires = new Date(Date.now() + 31536000000).toUTCString();
+    let cookie = encodeURIComponent(name) + '=' + encodeURIComponent(value);
+    cookie += '; expires=' + expires + '; path=/;';
+    if (window.location.protocol === 'https:') {{
+      cookie += ' Secure; SameSite=None;';
+    }} else {{
+      cookie += ' SameSite=Lax;';
+    }}
+    parentDoc.cookie = cookie;
+  }};
+  const deleteCookie = (name) => {{
+    let cookie = encodeURIComponent(name) + '=; max-age=0; path=/;';
+    if (window.location.protocol === 'https:') {{
+      cookie += ' Secure; SameSite=None;';
+    }} else {{
+      cookie += ' SameSite=Lax;';
+    }}
+    parentDoc.cookie = cookie;
+  }};
+  const cookies = {js_cookies};
+  const deleteKeys = {js_delete};
+  Object.entries(cookies).forEach(([name, value]) => setCookie(name, value));
+  deleteKeys.forEach((name) => deleteCookie(name));
+}})();
+</script>
+"""
+    components.html(script, height=0)
+
 # 🚀 終極網路引擎：企業級 HTTP Session 連線池 (搭配 RoyaleAPI Proxy)
 # 建立一個全局共享的 Session，讓所有執行緒共用 TCP 連線，模擬真實瀏覽器的 Keep-Alive 行為
 HTTP_SESSION = requests.Session()
@@ -151,6 +196,7 @@ if not st.session_state.authenticated:
                     try:
                         cookies["system_password"] = pwd_input
                         cookies.save()
+                        ios_cookie_fallback({"system_password": pwd_input}, [])
                         st.success("💾 密碼已保存到瀏覽器 Cookie")
                     except Exception as e:
                         st.warning(f"⚠️ 無法保存密碼到 Cookie: {str(e)}")
@@ -160,6 +206,7 @@ if not st.session_state.authenticated:
                         if "system_password" in cookies:
                             cookies["system_password"] = None
                             cookies.save()
+                            ios_cookie_fallback({}, ["system_password"])
                     except:
                         pass
                 st.success("✅ 密碼正確，系統解鎖中...")
@@ -830,24 +877,20 @@ def render_home():
                         cookies["bs_api_keys"] = json.dumps(valid_keys)
                         cookies["bs_api_key"] = valid_keys[0]
                         cookies.save()
+                        ios_cookie_fallback({
+                            "bs_api_keys": json.dumps(valid_keys),
+                            "bs_api_key": valid_keys[0],
+                        }, [])
                     else:
                         if "bs_api_keys" in cookies:
                             cookies["bs_api_keys"] = None
                         if "bs_api_key" in cookies:
                             cookies["bs_api_key"] = None
                         cookies.save()
+                        ios_cookie_fallback({}, ["bs_api_keys", "bs_api_key"])
                 except Exception as e:
                     st.warning(f"⚠️ 無法保存到 Cookie: {str(e)}")
             st.rerun()
-
-        valid_keys = [k for k in st.session_state.get("bs_api_keys", []) if k]
-        duplicate_keys = [k for k in valid_keys if valid_keys.count(k) > 1]
-        if valid_keys:
-            st.success(f"✅ 已輸入 {len(valid_keys)} 組 Brawl Stars Key(s)（含 {len(st.session_state.get('bs_api_keys', [])) - len(valid_keys)} 組空白欄位）")
-            if duplicate_keys:
-                st.error("❌ 同樣的 KEY 不能使用兩次以上，請移除重複項目。")
-        else:
-            st.warning("⚠️ 請至少輸入一組 Brawl Stars 金鑰。")
 
         if st.button("🗑️ 清除已保存的 Brawl Stars Key(s)", use_container_width=True):
             if cookies is not None:
@@ -889,11 +932,13 @@ def render_home():
                     if save_gemini_key:
                         cookies["gemini_api_key"] = st.session_state.gemini_api_key
                         cookies.save()
+                        ios_cookie_fallback({"gemini_api_key": st.session_state.gemini_api_key}, [])
                     else:
                         # 取消保存時清除 Cookie
                         if "gemini_api_key" in cookies:
                             cookies["gemini_api_key"] = None
                             cookies.save()
+                            ios_cookie_fallback({}, ["gemini_api_key"])
                 except Exception as e:
                     st.warning(f"⚠️ 無法保存到 Cookie: {str(e)}")
             st.rerun()
