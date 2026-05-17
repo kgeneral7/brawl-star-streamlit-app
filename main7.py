@@ -1044,7 +1044,6 @@ def render_scraper():
             "</div>",
             height=1,
             scrolling=False,
-            key="auto_refresh_script",
         )
 
     elif not st.session_state.is_running and st.session_state.logs:
