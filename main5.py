@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from collections import defaultdict
 import streamlit as st
 from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
+from streamlit_cookies_manager import CookieManager
 
 # 🌟 全域防護鎖 (保護跨執行緒共享的變數)
 GLOBAL_LOCK = threading.Lock()
@@ -42,6 +43,11 @@ HTTP_SESSION.mount("http://", adapter)
 # ================= 網頁基本設定 =================
 st.set_page_config(page_title="👑 K将軍 荒野戰術大廳", layout="wide", page_icon="🏆")
 
+# ================= 初始化 Cookie 管理器 =================
+cookies = CookieManager()
+if not cookies.ready():
+    st.stop()
+
 # ================= API 設定 =================
 BASE_URL = "https://bsproxy.royaleapi.dev/"
 
@@ -61,9 +67,13 @@ if not st.session_state.authenticated:
     col_pwd1, col_pwd2 = st.columns([1, 2])
     with col_pwd1:
         pwd_input = st.text_input("🔑 請輸入密碼", type="password")
+        save_pwd = st.checkbox("💾 記住密碼 (Cookie 存儲)", value=False)
         if st.button("解鎖系統", type="primary", use_container_width=True):
             if pwd_input == SYSTEM_PASSWORD:
                 st.session_state.authenticated = True
+                if save_pwd:
+                    cookies["system_password"] = pwd_input
+                    cookies.save()
                 st.success("✅ 密碼正確，系統解鎖中...")
                 time.sleep(0.5)
                 st.rerun()
@@ -85,10 +95,12 @@ try:
 except:
     pass
 
+# 🍪 從 Cookie 或環境變量讀取 API KEY
 if "bs_api_key" not in st.session_state:
-    st.session_state.bs_api_key = safe_bs_key
+    # 優先從 Cookie 讀取，其次從環境變量
+    st.session_state.bs_api_key = cookies.get("bs_api_key", safe_bs_key)
 if "gemini_api_key" not in st.session_state:
-    st.session_state.gemini_api_key = raw_gem_key
+    st.session_state.gemini_api_key = cookies.get("gemini_api_key", raw_gem_key)
 
 if "is_running" not in st.session_state:
     st.session_state.is_running = False
@@ -643,10 +655,18 @@ def render_home():
         bs_input = st.text_input(
             "🔑 Brawl Stars API Key", type="password", value=st.session_state.bs_api_key
         )
+        save_bs_key = st.checkbox(
+            "💾 記住 Brawl Stars API Key (Cookie 存儲)",
+            value=False,
+            key="save_bs_checkbox",
+        )
         if bs_input != st.session_state.bs_api_key:
             st.session_state.bs_api_key = (
                 bs_input.replace('"', "").replace("'", "").strip()
             )
+            if save_bs_key and st.session_state.bs_api_key:
+                cookies["bs_api_key"] = st.session_state.bs_api_key
+                cookies.save()
             st.rerun()
 
         if st.session_state.bs_api_key:
@@ -658,6 +678,14 @@ def render_home():
         else:
             st.warning("⚠️ 請貼上您的 Brawl Stars 金鑰。")
 
+        if st.button("🗑️ 清除已保存的 Brawl Stars Key", use_container_width=True):
+            if "bs_api_key" in cookies:
+                cookies["bs_api_key"] = None
+                cookies.save()
+            st.session_state.bs_api_key = ""
+            st.success("✅ 已清除！")
+            st.rerun()
+
     with col2:
         st.info("🧠 **BP AI 分析狀態**")
         gemini_input = st.text_input(
@@ -665,13 +693,29 @@ def render_home():
             type="password",
             value=st.session_state.gemini_api_key,
         )
+        save_gemini_key = st.checkbox(
+            "💾 記住 Gemini API Key (Cookie 存儲)",
+            value=False,
+            key="save_gemini_checkbox",
+        )
         if gemini_input != st.session_state.gemini_api_key:
             st.session_state.gemini_api_key = gemini_input.strip()
+            if save_gemini_key and st.session_state.gemini_api_key:
+                cookies["gemini_api_key"] = st.session_state.gemini_api_key
+                cookies.save()
             st.rerun()
         if st.session_state.gemini_api_key:
             st.success("✅ Gemini 金鑰已準備就緒！")
         else:
             st.warning("⚠️ 請貼上您的 Gemini 金鑰。")
+
+        if st.button("🗑️ 清除已保存的 Gemini Key", use_container_width=True):
+            if "gemini_api_key" in cookies:
+                cookies["gemini_api_key"] = None
+                cookies.save()
+            st.session_state.gemini_api_key = ""
+            st.success("✅ 已清除！")
+            st.rerun()
 
     st.markdown("### 🧭 系統導覽")
     col_a, col_b = st.columns(2)
