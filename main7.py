@@ -789,13 +789,13 @@ def render_home():
                         kname = f"bs_key_{i}"
                         if kname in st.session_state:
                             del st.session_state[kname]
-                        st.experimental_rerun()
+                        st.rerun()
 
         if st.button("➕ 新增 API Key", use_container_width=True, key="add_bs_key"):
             new = st.session_state.get("bs_api_keys", [])
             new.append("")
             st.session_state.bs_api_keys = new
-            st.experimental_rerun()
+            st.rerun()
 
         # 讀回所有 widget 的值並同步到 bs_api_keys
         updated_keys = []
@@ -821,7 +821,7 @@ def render_home():
                         cookies.save()
                 except Exception as e:
                     st.warning(f"⚠️ 無法保存到 Cookie: {str(e)}")
-            st.experimental_rerun()
+            st.rerun()
 
         if st.session_state.get("bs_api_keys"):
             st.success(f"✅ 已輸入 {len(st.session_state.get('bs_api_keys'))} 組 Brawl Stars Key(s)")
@@ -846,7 +846,7 @@ def render_home():
                 if kname in st.session_state:
                     del st.session_state[kname]
             st.success("✅ 已清除！")
-            st.experimental_rerun()
+            st.rerun()
 
     with col2:
         st.info("🧠 **BP AI 分析狀態**")
