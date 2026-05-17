@@ -1034,7 +1034,7 @@ def render_scraper():
         st.code("\n".join(st.session_state.logs[-25:]), language="plaintext")
         st.info("⏱️ 系統每 3 秒自動更新目前狀態。")
         time.sleep(3)
-        st.experimental_rerun()
+        st.rerun()
 
     elif not st.session_state.is_running and st.session_state.logs:
         st.markdown("### 📝 上次執行日誌")
