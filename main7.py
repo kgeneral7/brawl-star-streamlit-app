@@ -1029,8 +1029,8 @@ def render_scraper():
             f"🔄 **多核心收割陣列全速運作中...** (目前有 {st.session_state.active_tasks} 個核心正在背景狂飆！)"
         )
         st.code("\n".join(st.session_state.logs[-25:]), language="plaintext")
-        time.sleep(1.5)
-        st.rerun()
+        if st.button("🔄 手動刷新狀態", use_container_width=True):
+            st.rerun()
 
     elif not st.session_state.is_running and st.session_state.logs:
         st.markdown("### 📝 上次執行日誌")
