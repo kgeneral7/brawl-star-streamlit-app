@@ -479,7 +479,6 @@ def harvest_rooms(duration, worker_count, ctx):
         t.daemon = True
         add_script_run_ctx(t, ctx)
         t.start()
-        time.sleep(0.1)
 
 
 def harvest_solo(duration, worker_count, ctx):
@@ -636,7 +635,6 @@ def harvest_solo(duration, worker_count, ctx):
         t.daemon = True
         add_script_run_ctx(t, ctx)
         t.start()
-        time.sleep(0.1)
 
 
 def generate_csv(data, mode):
