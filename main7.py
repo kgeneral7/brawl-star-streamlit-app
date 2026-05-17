@@ -801,17 +801,16 @@ def render_home():
         updated_keys = []
         for i in range(len(st.session_state.get("bs_api_keys", []))):
             updated_keys.append(st.session_state.get(f"bs_key_{i}", "").strip())
-        # 移除空字串
-        updated_keys = [k for k in updated_keys if k]
         if updated_keys != st.session_state.get("bs_api_keys", []):
             st.session_state.bs_api_keys = updated_keys
-            st.session_state.bs_api_key = updated_keys[0] if updated_keys else ""
-            # 儲存到 Cookie
+            valid_keys = [k for k in updated_keys if k]
+            st.session_state.bs_api_key = valid_keys[0] if valid_keys else ""
+            # 儲存到 Cookie（僅保存非空 key）
             if cookies is not None:
                 try:
-                    if save_bs_key and updated_keys:
-                        cookies["bs_api_keys"] = "\n".join(updated_keys)
-                        cookies["bs_api_key"] = updated_keys[0]
+                    if save_bs_key and valid_keys:
+                        cookies["bs_api_keys"] = "\n".join(valid_keys)
+                        cookies["bs_api_key"] = valid_keys[0]
                         cookies.save()
                     else:
                         if "bs_api_keys" in cookies:
@@ -823,8 +822,9 @@ def render_home():
                     st.warning(f"⚠️ 無法保存到 Cookie: {str(e)}")
             st.rerun()
 
-        if st.session_state.get("bs_api_keys"):
-            st.success(f"✅ 已輸入 {len(st.session_state.get('bs_api_keys'))} 組 Brawl Stars Key(s)")
+        valid_keys = [k for k in st.session_state.get("bs_api_keys", []) if k]
+        if valid_keys:
+            st.success(f"✅ 已輸入 {len(valid_keys)} 組 Brawl Stars Key(s)（含 {len(st.session_state.get('bs_api_keys', [])) - len(valid_keys)} 組空白欄位）")
         else:
             st.warning("⚠️ 請至少輸入一組 Brawl Stars 金鑰。")
 
@@ -949,7 +949,8 @@ def render_scraper():
             use_container_width=True,
             type="primary",
         ):
-            keys = st.session_state.get("bs_api_keys") or []
+            raw_keys = st.session_state.get("bs_api_keys") or []
+            keys = [k for k in raw_keys if k]
             if not keys:
                 st.error("請先前往【首頁大廳】輸入至少一組 Brawl Stars API Key！")
             elif not st.session_state.scraper_modes:
@@ -975,7 +976,7 @@ def render_scraper():
 
                 log_message(f"🔑 使用 {len(keys)} 組 API Key，啟動 {st.session_state.worker_count} 個 worker。")
                 # 建立每個 API key 的 session 清單，讓每個 worker 使用不同 key
-                st.session_state.bs_api_keys = keys
+                st.session_state.bs_api_keys = raw_keys
                 st.session_state.http_sessions = [create_http_session(k) for k in keys[:16]]
 
                 ctx = get_script_run_ctx()
