@@ -805,8 +805,8 @@ def render_home():
             st.session_state.bs_api_keys = updated_keys
             valid_keys = [k for k in updated_keys if k]
             st.session_state.bs_api_key = valid_keys[0] if valid_keys else ""
-            # 儲存到 Cookie（僅保存非空 key）
-            if cookies is not None:
+            duplicate_keys = [k for k in valid_keys if valid_keys.count(k) > 1]
+            if cookies is not None and not duplicate_keys:
                 try:
                     if save_bs_key and valid_keys:
                         cookies["bs_api_keys"] = "\n".join(valid_keys)
@@ -823,8 +823,11 @@ def render_home():
             st.rerun()
 
         valid_keys = [k for k in st.session_state.get("bs_api_keys", []) if k]
+        duplicate_keys = [k for k in valid_keys if valid_keys.count(k) > 1]
         if valid_keys:
             st.success(f"✅ 已輸入 {len(valid_keys)} 組 Brawl Stars Key(s)（含 {len(st.session_state.get('bs_api_keys', [])) - len(valid_keys)} 組空白欄位）")
+            if duplicate_keys:
+                st.error("❌ 同樣的 KEY 不能使用兩次以上，請移除重複項目。")
         else:
             st.warning("⚠️ 請至少輸入一組 Brawl Stars 金鑰。")
 
@@ -929,17 +932,22 @@ def render_scraper():
 
         st.divider()
         st.header("⚡ 效能壓榨引擎")
+        valid_keys = [k for k in st.session_state.get("bs_api_keys", []) if k]
+        max_workers = max(1, len(valid_keys))
         w_count = st.slider(
             "🚀 併發核心數 (每個模式的分配量)",
             min_value=1,
-            max_value=16,
-            value=st.session_state.worker_count,
+            max_value=max_workers,
+            value=min(st.session_state.worker_count, max_workers),
             step=1,
+            disabled=len(valid_keys) == 0,
         )
         st.session_state.worker_count = w_count
         st.caption(
-            "🛡️ 已掛載企業級連線池 (Session Pool)，您現在可以大膽開啟多核心運算！"
+            "🛡️ 核心數上限已限制為目前有效 API Key 的數量。"
         )
+        if len(valid_keys) == 0:
+            st.warning("請先於首頁輸入至少一組有效的 Brawl Stars API Key。")
 
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -951,7 +959,9 @@ def render_scraper():
         ):
             raw_keys = st.session_state.get("bs_api_keys") or []
             keys = [k for k in raw_keys if k]
-            if not keys:
+            if len(set(keys)) != len(keys):
+                st.error("❌ 同樣的 KEY 不能使用兩次以上，請先移除重複項目。")
+            elif not keys:
                 st.error("請先前往【首頁大廳】輸入至少一組 Brawl Stars API Key！")
             elif not st.session_state.scraper_modes:
                 st.error("請至少選擇一種收割模式！")
