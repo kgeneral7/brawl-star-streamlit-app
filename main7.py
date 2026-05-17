@@ -761,29 +761,57 @@ def render_home():
     col1, col2 = st.columns(2)
     with col1:
         st.info("⚙️ **排位收割機狀態**")
-        bs_input_multi = st.text_area(
-            "🔑 Brawl Stars API Key(s) — 每行一個或以逗號分隔",
-            value="\n".join(st.session_state.get("bs_api_keys", [])),
-            placeholder="輸入一或多個 API Key，例如：\nkey1\nkey2",
-            height=100,
-        )
         save_bs_key = st.checkbox(
             "💾 記住 Brawl Stars API Key(s) (Cookie 存儲)",
             value=bool(st.session_state.get("bs_api_keys")),
             key="save_bs_checkbox",
         )
-        # 解析輸入的 key（支援逗號或換行分隔）
-        parsed_keys = [k.strip() for k in bs_input_multi.replace(",", "\n").splitlines() if k.strip()]
-        if parsed_keys != st.session_state.get("bs_api_keys", []):
-            st.session_state.bs_api_keys = parsed_keys
-            st.session_state.bs_api_key = parsed_keys[0] if parsed_keys else ""
-            # 💾 保存多 key 到 Cookie（以換行串接）
+
+        # 動態渲染每一個 key 欄位，並提供新增/刪除按鈕
+        keys = st.session_state.get("bs_api_keys", [])
+        st.markdown("**🔑 已輸入的 API Keys**")
+        for i in range(len(keys)):
+            c1, c2 = st.columns([9, 1])
+            with c1:
+                # 使用固定 widget key 保持狀態：bs_key_{i}
+                st.text_input(
+                    label=f"Key #{i+1}",
+                    value=keys[i],
+                    key=f"bs_key_{i}",
+                )
+            with c2:
+                if st.button("刪除", key=f"rm_key_{i}"):
+                    new = st.session_state.get("bs_api_keys", [])
+                    if i < len(new):
+                        new.pop(i)
+                        st.session_state.bs_api_keys = new
+                        # 也同步移除對應的 widget 值
+                        kname = f"bs_key_{i}"
+                        if kname in st.session_state:
+                            del st.session_state[kname]
+                        st.experimental_rerun()
+
+        if st.button("➕ 新增 API Key", use_container_width=True, key="add_bs_key"):
+            new = st.session_state.get("bs_api_keys", [])
+            new.append("")
+            st.session_state.bs_api_keys = new
+            st.experimental_rerun()
+
+        # 讀回所有 widget 的值並同步到 bs_api_keys
+        updated_keys = []
+        for i in range(len(st.session_state.get("bs_api_keys", []))):
+            updated_keys.append(st.session_state.get(f"bs_key_{i}", "").strip())
+        # 移除空字串
+        updated_keys = [k for k in updated_keys if k]
+        if updated_keys != st.session_state.get("bs_api_keys", []):
+            st.session_state.bs_api_keys = updated_keys
+            st.session_state.bs_api_key = updated_keys[0] if updated_keys else ""
+            # 儲存到 Cookie
             if cookies is not None:
                 try:
-                    if save_bs_key and parsed_keys:
-                        cookies["bs_api_keys"] = "\n".join(parsed_keys)
-                        # 仍兼容單 key 名稱
-                        cookies["bs_api_key"] = parsed_keys[0]
+                    if save_bs_key and updated_keys:
+                        cookies["bs_api_keys"] = "\n".join(updated_keys)
+                        cookies["bs_api_key"] = updated_keys[0]
                         cookies.save()
                     else:
                         if "bs_api_keys" in cookies:
@@ -793,16 +821,12 @@ def render_home():
                         cookies.save()
                 except Exception as e:
                     st.warning(f"⚠️ 無法保存到 Cookie: {str(e)}")
-            st.rerun()
+            st.experimental_rerun()
 
-        if st.session_state.bs_api_key:
-            st.success("✅ Brawl Stars 金鑰已準備就緒！")
-            key_len = len(st.session_state.bs_api_key)
-            if key_len > 10:
-                preview = f"{st.session_state.bs_api_key[:5]}...{st.session_state.bs_api_key[-5:]}"
-                st.markdown(f"*(已綁定 {key_len} 字元金鑰: `{preview}`)*")
+        if st.session_state.get("bs_api_keys"):
+            st.success(f"✅ 已輸入 {len(st.session_state.get('bs_api_keys'))} 組 Brawl Stars Key(s)")
         else:
-            st.warning("⚠️ 請貼上您的 Brawl Stars 金鑰。")
+            st.warning("⚠️ 請至少輸入一組 Brawl Stars 金鑰。")
 
         if st.button("🗑️ 清除已保存的 Brawl Stars Key(s)", use_container_width=True):
             if cookies is not None:
@@ -816,8 +840,13 @@ def render_home():
                     pass
             st.session_state.bs_api_key = ""
             st.session_state.bs_api_keys = []
+            # 清除動態 widget
+            for i in range(0, 32):
+                kname = f"bs_key_{i}"
+                if kname in st.session_state:
+                    del st.session_state[kname]
             st.success("✅ 已清除！")
-            st.rerun()
+            st.experimental_rerun()
 
     with col2:
         st.info("🧠 **BP AI 分析狀態**")
@@ -920,11 +949,19 @@ def render_scraper():
             use_container_width=True,
             type="primary",
         ):
-            if not st.session_state.bs_api_key:
-                st.error("請先前往【首頁大廳】輸入 Brawl Stars API Key！")
+            keys = st.session_state.get("bs_api_keys") or []
+            if not keys:
+                st.error("請先前往【首頁大廳】輸入至少一組 Brawl Stars API Key！")
             elif not st.session_state.scraper_modes:
                 st.error("請至少選擇一種收割模式！")
             else:
+                # 根據輸入的 keys 自動設定 worker_count（上限 16）
+                desired_workers = len(keys)
+                if desired_workers > 16:
+                    st.warning("⚠️ Worker 上限為 16，將只使用前 16 組 Keys。")
+                    desired_workers = 16
+                st.session_state.worker_count = desired_workers
+
                 st.session_state.is_running = True
                 st.session_state.active_tasks = 0
                 st.session_state.rooms_data = []
@@ -936,17 +973,10 @@ def render_scraper():
                     f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
                 )
 
-                # 🚀 啟動前，將原版完美的 Headers 注入到全局的連線池中
-                log_message(
-                    f"🔑 API Key 設定狀態: {'已設定' if st.session_state.bs_api_key else '未設定'}"
-                )
+                log_message(f"🔑 使用 {len(keys)} 組 API Key，啟動 {st.session_state.worker_count} 個 worker。")
                 # 建立每個 API key 的 session 清單，讓每個 worker 使用不同 key
-                keys = st.session_state.get("bs_api_keys") or ([st.session_state.get("bs_api_key")] if st.session_state.get("bs_api_key") else [])
-                if not keys:
-                    st.error("請先於首頁設定至少一個 Brawl Stars API Key！")
-                    st.rerun()
                 st.session_state.bs_api_keys = keys
-                st.session_state.http_sessions = [create_http_session(k) for k in keys]
+                st.session_state.http_sessions = [create_http_session(k) for k in keys[:16]]
 
                 ctx = get_script_run_ctx()
 
