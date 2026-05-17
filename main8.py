@@ -892,6 +892,15 @@ def render_home():
                     st.warning(f"⚠️ 無法保存到 Cookie: {str(e)}")
             st.rerun()
 
+        valid_keys = [k for k in st.session_state.get("bs_api_keys", []) if k]
+        duplicate_keys = [k for k in valid_keys if valid_keys.count(k) > 1]
+        if valid_keys:
+            st.success(f"✅ 已輸入 {len(valid_keys)} 組 Brawl Stars Key(s)（含 {len(st.session_state.get('bs_api_keys', [])) - len(valid_keys)} 組空白欄位）")
+            if duplicate_keys:
+                st.error("❌ 同樣的 KEY 不能使用兩次以上，請移除重複項目。")
+        else:
+            st.warning("⚠️ 請至少輸入一組 Brawl Stars 金鑰。")
+
         if st.button("🗑️ 清除已保存的 Brawl Stars Key(s)", use_container_width=True):
             if cookies is not None:
                 try:
