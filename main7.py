@@ -1034,8 +1034,17 @@ def render_scraper():
         st.code("\n".join(st.session_state.logs[-25:]), language="plaintext")
         st.info("⏱️ 系統將自動刷新頁面以顯示最新狀態。")
         components.html(
-            "<script>setTimeout(function(){window.location.reload();}, 3000);</script>",
-            height=0,
+            "<div style='display:none'>"
+            "<script>"
+            "const reloadPage = () => {"
+            "try { window.location.reload(); } catch (e) { parent.location.reload(); }"
+            "};"
+            "setInterval(reloadPage, 3000);"
+            "</script>"
+            "</div>",
+            height=1,
+            scrolling=False,
+            key="auto_refresh_script",
         )
 
     elif not st.session_state.is_running and st.session_state.logs:
