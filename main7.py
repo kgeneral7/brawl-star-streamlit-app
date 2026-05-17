@@ -1034,14 +1034,16 @@ def render_scraper():
         st.code("\n".join(st.session_state.logs[-25:]), language="plaintext")
         st.info("⏱️ 系統將自動刷新頁面以顯示最新狀態。")
         components.html(
+            "<div style='position:fixed; left:0; top:0; width:1px; height:1px; opacity:0; z-index:-1;'>"
             "<script>"
             "const reloadPage = () => {"
             "  const target = window.top || window.parent || window;"
-            "  target.location.href = target.location.href;"
+            "  try { target.location.replace(target.location.href); } catch (e) { window.location.replace(window.location.href); }"
             "};"
             "setInterval(reloadPage, 3000);"
-            "</script>",
-            height=10,
+            "</script>"
+            "</div>",
+            height=50,
             scrolling=False,
         )
 
