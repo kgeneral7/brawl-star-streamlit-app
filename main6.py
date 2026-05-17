@@ -43,10 +43,21 @@ HTTP_SESSION.mount("http://", adapter)
 # ================= 網頁基本設定 =================
 st.set_page_config(page_title="👑 K将軍 荒野戰術大廳", layout="wide", page_icon="🏆")
 
-# ================= 初始化 Cookie 管理器 =================
-cookies = CookieManager()
-if not cookies.ready():
-    st.stop()
+# ================= 初始化 Cookie 管理器 (強化版) =================
+import time as time_module
+
+try:
+    cookies = CookieManager()
+    # 🔄 多次嘗試初始化，確保 Cookie 準備就緒
+    retry_count = 0
+    while not cookies.ready() and retry_count < 5:
+        time_module.sleep(0.1)
+        retry_count += 1
+    if not cookies.ready():
+        st.warning("⚠️ Cookie 管理器初始化失敗，部分功能可能不可用")
+except Exception as e:
+    st.warning(f"⚠️ Cookie 初始化錯誤: {str(e)}")
+    cookies = None
 
 # ================= API 設定 =================
 BASE_URL = "https://bsproxy.royaleapi.dev/"
@@ -64,16 +75,48 @@ if not st.session_state.authenticated:
     st.title("🔒 K将軍 戰術大廳 - 系統鎖定")
     st.markdown("請輸入專屬密碼以啟動系統核心。")
 
+    # 🍪 嘗試從 Cookie 讀取已保存的密碼
+    saved_pwd = ""
+    if cookies is not None:
+        try:
+            saved_pwd = cookies.get("system_password", "")
+        except:
+            saved_pwd = ""
+
+    # 如果有已保存的密碼，嘗試自動登錄
+    if saved_pwd and saved_pwd == SYSTEM_PASSWORD:
+        st.session_state.authenticated = True
+        st.success("✅ 自動驗證成功，系統解鎖中...")
+        time.sleep(0.5)
+        st.rerun()
+
     col_pwd1, col_pwd2 = st.columns([1, 2])
     with col_pwd1:
-        pwd_input = st.text_input("🔑 請輸入密碼", type="password")
-        save_pwd = st.checkbox("💾 記住密碼 (Cookie 存儲)", value=False)
+        pwd_input = st.text_input(
+            "🔑 請輸入密碼",
+            type="password",
+            value=saved_pwd if saved_pwd != SYSTEM_PASSWORD else "",
+        )
+        save_pwd = st.checkbox("💾 記住密碼 (Cookie 存儲)", value=bool(saved_pwd))
         if st.button("解鎖系統", type="primary", use_container_width=True):
             if pwd_input == SYSTEM_PASSWORD:
                 st.session_state.authenticated = True
-                if save_pwd:
-                    cookies["system_password"] = pwd_input
-                    cookies.save()
+                # 💾 保存密碼到 Cookie
+                if save_pwd and cookies is not None:
+                    try:
+                        cookies["system_password"] = pwd_input
+                        cookies.save()
+                        st.success("💾 密碼已保存到瀏覽器 Cookie")
+                    except Exception as e:
+                        st.warning(f"⚠️ 無法保存密碼到 Cookie: {str(e)}")
+                elif not save_pwd and cookies is not None:
+                    # 清除 Cookie 中的密碼
+                    try:
+                        if "system_password" in cookies:
+                            cookies["system_password"] = None
+                            cookies.save()
+                    except:
+                        pass
                 st.success("✅ 密碼正確，系統解鎖中...")
                 time.sleep(0.5)
                 st.rerun()
@@ -95,12 +138,29 @@ try:
 except:
     pass
 
-# 🍪 從 Cookie 或環境變量讀取 API KEY
+# 🍪 從 Cookie 或環境變量讀取 API KEY (強化版)
 if "bs_api_key" not in st.session_state:
     # 優先從 Cookie 讀取，其次從環境變量
-    st.session_state.bs_api_key = cookies.get("bs_api_key", safe_bs_key)
+    if cookies is not None:
+        try:
+            st.session_state.bs_api_key = (
+                cookies.get("bs_api_key", safe_bs_key) or safe_bs_key
+            )
+        except:
+            st.session_state.bs_api_key = safe_bs_key
+    else:
+        st.session_state.bs_api_key = safe_bs_key
+
 if "gemini_api_key" not in st.session_state:
-    st.session_state.gemini_api_key = cookies.get("gemini_api_key", raw_gem_key)
+    if cookies is not None:
+        try:
+            st.session_state.gemini_api_key = (
+                cookies.get("gemini_api_key", raw_gem_key) or raw_gem_key
+            )
+        except:
+            st.session_state.gemini_api_key = raw_gem_key
+    else:
+        st.session_state.gemini_api_key = raw_gem_key
 
 if "is_running" not in st.session_state:
     st.session_state.is_running = False
@@ -657,16 +717,26 @@ def render_home():
         )
         save_bs_key = st.checkbox(
             "💾 記住 Brawl Stars API Key (Cookie 存儲)",
-            value=False,
+            value=bool(st.session_state.bs_api_key),
             key="save_bs_checkbox",
         )
         if bs_input != st.session_state.bs_api_key:
             st.session_state.bs_api_key = (
                 bs_input.replace('"', "").replace("'", "").strip()
             )
-            if save_bs_key and st.session_state.bs_api_key:
-                cookies["bs_api_key"] = st.session_state.bs_api_key
-                cookies.save()
+            # 💾 立即保存到 Cookie
+            if st.session_state.bs_api_key and cookies is not None:
+                try:
+                    if save_bs_key:
+                        cookies["bs_api_key"] = st.session_state.bs_api_key
+                        cookies.save()
+                    else:
+                        # 取消保存時清除 Cookie
+                        if "bs_api_key" in cookies:
+                            cookies["bs_api_key"] = None
+                            cookies.save()
+                except Exception as e:
+                    st.warning(f"⚠️ 無法保存到 Cookie: {str(e)}")
             st.rerun()
 
         if st.session_state.bs_api_key:
@@ -679,9 +749,13 @@ def render_home():
             st.warning("⚠️ 請貼上您的 Brawl Stars 金鑰。")
 
         if st.button("🗑️ 清除已保存的 Brawl Stars Key", use_container_width=True):
-            if "bs_api_key" in cookies:
-                cookies["bs_api_key"] = None
-                cookies.save()
+            if cookies is not None:
+                try:
+                    if "bs_api_key" in cookies:
+                        cookies["bs_api_key"] = None
+                        cookies.save()
+                except:
+                    pass
             st.session_state.bs_api_key = ""
             st.success("✅ 已清除！")
             st.rerun()
@@ -695,14 +769,24 @@ def render_home():
         )
         save_gemini_key = st.checkbox(
             "💾 記住 Gemini API Key (Cookie 存儲)",
-            value=False,
+            value=bool(st.session_state.gemini_api_key),
             key="save_gemini_checkbox",
         )
         if gemini_input != st.session_state.gemini_api_key:
             st.session_state.gemini_api_key = gemini_input.strip()
-            if save_gemini_key and st.session_state.gemini_api_key:
-                cookies["gemini_api_key"] = st.session_state.gemini_api_key
-                cookies.save()
+            # 💾 立即保存到 Cookie
+            if st.session_state.gemini_api_key and cookies is not None:
+                try:
+                    if save_gemini_key:
+                        cookies["gemini_api_key"] = st.session_state.gemini_api_key
+                        cookies.save()
+                    else:
+                        # 取消保存時清除 Cookie
+                        if "gemini_api_key" in cookies:
+                            cookies["gemini_api_key"] = None
+                            cookies.save()
+                except Exception as e:
+                    st.warning(f"⚠️ 無法保存到 Cookie: {str(e)}")
             st.rerun()
         if st.session_state.gemini_api_key:
             st.success("✅ Gemini 金鑰已準備就緒！")
@@ -710,9 +794,13 @@ def render_home():
             st.warning("⚠️ 請貼上您的 Gemini 金鑰。")
 
         if st.button("🗑️ 清除已保存的 Gemini Key", use_container_width=True):
-            if "gemini_api_key" in cookies:
-                cookies["gemini_api_key"] = None
-                cookies.save()
+            if cookies is not None:
+                try:
+                    if "gemini_api_key" in cookies:
+                        cookies["gemini_api_key"] = None
+                        cookies.save()
+                except:
+                    pass
             st.session_state.gemini_api_key = ""
             st.success("✅ 已清除！")
             st.rerun()
