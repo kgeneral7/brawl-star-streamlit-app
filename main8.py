@@ -980,9 +980,10 @@ def render_home():
         st.write("載入收割機產出的 CSV，提供超光速的選角與 Ban 角建議。")
 
 
-def render_scraper():
+def render_scraper(sidebar=None):
     st.title("🚀 荒野亂鬥 終極排位收割機")
-    with st.sidebar:
+    sidebar = sidebar if sidebar is not None else st.sidebar
+    with sidebar:
         st.header("⚙️ 收割機設定")
         duration = st.number_input(
             "⏳ 執行時間 (分鐘)",
@@ -1176,9 +1177,10 @@ def render_scraper():
                     )
 
 
-def render_bp():
+def render_bp(sidebar=None):
     st.title("🤖 K将軍 BP 即時戰術指示器")
-    with st.sidebar:
+    sidebar = sidebar if sidebar is not None else st.sidebar
+    with sidebar:
         st.header("📂 數據庫載入")
         uploaded_files = st.file_uploader(
             "選擇一個或多個 CSV", type=["csv"], accept_multiple_files=True
@@ -1405,14 +1407,15 @@ def render_bp():
 
 
 # ================= 4. 側邊欄導航路由 (Router) =================
-st.sidebar.title("🧭 系統導航")
-page = st.sidebar.radio(
+sidebar = st.sidebar
+sidebar.title("🧭 系統導航")
+page = sidebar.radio(
     "前往", ["🏠 首頁大廳", "🚀 排位數據收割機", "🤖 BP 即時戰術指示器"]
 )
-st.sidebar.divider()
+sidebar.divider()
 if page == "🏠 首頁大廳":
     render_home()
 elif page == "🚀 排位數據收割機":
-    render_scraper()
+    render_scraper(sidebar)
 elif page == "🤖 BP 即時戰術指示器":
-    render_bp()
+    render_bp(sidebar)
