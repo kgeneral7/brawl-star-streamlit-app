@@ -833,12 +833,11 @@ def render_home():
         )
 
         # 動態渲染每一個 key 欄位，並提供新增/刪除按鈕
-        keys = st.session_state.get("bs_api_keys", [])
+        keys = st.session_state.get("bs_api_keys", []) or [""]
         st.markdown("**🔑 已輸入的 API Keys**")
         for i in range(len(keys)):
             c1, c2 = st.columns([9, 1])
             with c1:
-                # 使用固定 widget key 保持狀態：bs_key_{i}
                 st.text_input(
                     label=f"Key #{i+1}",
                     value=keys[i],
@@ -846,28 +845,29 @@ def render_home():
                 )
             with c2:
                 if st.button("刪除", key=f"rm_key_{i}"):
-                    new = st.session_state.get("bs_api_keys", [])
-                    if i < len(new):
-                        new.pop(i)
-                        st.session_state.bs_api_keys = new
-                        # 也同步移除對應的 widget 值
-                        kname = f"bs_key_{i}"
-                        if kname in st.session_state:
-                            del st.session_state[kname]
-                        st.rerun()
+                    current_keys = [
+                        st.session_state.get(f"bs_key_{j}", "").strip()
+                        for j in range(len(keys))
+                        if j != i
+                    ]
+                    st.session_state.bs_api_keys = [k for k in current_keys if k]
+                    if f"bs_key_{i}" in st.session_state:
+                        del st.session_state[f"bs_key_{i}"]
 
         if st.button("➕ 新增 API Key", use_container_width=True, key="add_bs_key"):
-            new = st.session_state.get("bs_api_keys", [])
-            new.append("")
-            st.session_state.bs_api_keys = new
-            st.rerun()
+            current_keys = [
+                st.session_state.get(f"bs_key_{j}", "").strip()
+                for j in range(len(keys))
+            ]
+            current_keys.append("")
+            st.session_state.bs_api_keys = current_keys
 
-        # 讀回所有 widget 的值並同步到 bs_api_keys
-        updated_keys = []
-        for i in range(len(st.session_state.get("bs_api_keys", []))):
-            updated_keys.append(st.session_state.get(f"bs_key_{i}", "").strip())
+        updated_keys = [
+            st.session_state.get(f"bs_key_{i}", "").strip()
+            for i in range(len(keys))
+        ]
         if updated_keys != st.session_state.get("bs_api_keys", []):
-            st.session_state.bs_api_keys = updated_keys
+            st.session_state.bs_api_keys = updated_keys or [""]
             valid_keys = [k for k in updated_keys if k]
             st.session_state.bs_api_key = valid_keys[0] if valid_keys else ""
             duplicate_keys = [k for k in valid_keys if valid_keys.count(k) > 1]
@@ -890,12 +890,13 @@ def render_home():
                         ios_cookie_fallback({}, ["bs_api_keys", "bs_api_key"])
                 except Exception as e:
                     st.warning(f"⚠️ 無法保存到 Cookie: {str(e)}")
-            st.rerun()
 
         valid_keys = [k for k in st.session_state.get("bs_api_keys", []) if k]
         duplicate_keys = [k for k in valid_keys if valid_keys.count(k) > 1]
         if valid_keys:
-            st.success(f"✅ 已輸入 {len(valid_keys)} 組 Brawl Stars Key(s)（含 {len(st.session_state.get('bs_api_keys', [])) - len(valid_keys)} 組空白欄位）")
+            st.success(
+                f"✅ 已輸入 {len(valid_keys)} 組 Brawl Stars Key(s)（含 {len(st.session_state.get('bs_api_keys', [])) - len(valid_keys)} 組空白欄位）"
+            )
             if duplicate_keys:
                 st.error("❌ 同樣的 KEY 不能使用兩次以上，請移除重複項目。")
         else:
@@ -919,7 +920,6 @@ def render_home():
                 if kname in st.session_state:
                     del st.session_state[kname]
             st.success("✅ 已清除！")
-            st.rerun()
 
     with col2:
         st.info("🧠 **BP AI 分析狀態**")
@@ -950,7 +950,6 @@ def render_home():
                             ios_cookie_fallback({}, ["gemini_api_key"])
                 except Exception as e:
                     st.warning(f"⚠️ 無法保存到 Cookie: {str(e)}")
-            st.rerun()
         if st.session_state.gemini_api_key:
             st.success("✅ Gemini 金鑰已準備就緒！")
         else:
@@ -966,7 +965,6 @@ def render_home():
                     pass
             st.session_state.gemini_api_key = ""
             st.success("✅ 已清除！")
-            st.rerun()
 
     st.markdown("### 🧭 系統導覽")
     col_a, col_b = st.columns(2)
