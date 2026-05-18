@@ -1135,10 +1135,7 @@ def render_scraper(sidebar=None):
             f"🔄 **多核心收割陣列全速運作中...** (目前有 {st.session_state.active_tasks} 個核心正在背景狂飆！)"
         )
         st.code("\n".join(st.session_state.logs[-25:]), language="plaintext")
-        st.info("⏱️ 系統每 3 秒自動更新目前狀態。")
-        time.sleep(3)
-        if st.session_state.get("current_page") == "🚀 排位數據收割機":
-            st.rerun()
+        st.info("⏱️ 收割機正在運行中，請使用右側按鈕手動刷新或切換頁面。")
 
     elif not st.session_state.is_running and st.session_state.logs:
         st.markdown("### 📝 上次執行日誌")
