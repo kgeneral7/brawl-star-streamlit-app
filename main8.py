@@ -1006,14 +1006,25 @@ def render_scraper():
         st.header("⚡ 效能壓榨引擎")
         valid_keys = [k for k in st.session_state.get("bs_api_keys", []) if k]
         max_workers = max(1, len(valid_keys))
-        w_count = st.slider(
-            "🚀 併發核心數 (每個模式的分配量)",
-            min_value=1,
-            max_value=max_workers,
-            value=min(st.session_state.worker_count, max_workers),
-            step=1,
-            disabled=len(valid_keys) == 0,
-        )
+        default_worker = min(st.session_state.worker_count, max_workers)
+        if max_workers == 1:
+            w_count = st.number_input(
+                "🚀 併發核心數 (每個模式的分配量)",
+                min_value=1,
+                max_value=max_workers,
+                value=default_worker,
+                step=1,
+                disabled=len(valid_keys) == 0,
+            )
+        else:
+            w_count = st.slider(
+                "🚀 併發核心數 (每個模式的分配量)",
+                min_value=1,
+                max_value=max_workers,
+                value=default_worker,
+                step=1,
+                disabled=len(valid_keys) == 0,
+            )
         st.session_state.worker_count = w_count
         st.caption(
             "🛡️ 核心數上限已限制為目前有效 API Key 的數量。"
