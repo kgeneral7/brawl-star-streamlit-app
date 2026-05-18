@@ -54,44 +54,58 @@ def ios_cookie_fallback(cookies_to_set: dict = None, cookies_to_delete: list = N
         cookies_to_set = {}
     if cookies_to_delete is None:
         cookies_to_delete = []
-    js_cookies = json.dumps(cookies_to_set)
-    js_delete = json.dumps(cookies_to_delete)
-    script = f"""
+        js_cookies = json.dumps(cookies_to_set)
+        js_delete = json.dumps(cookies_to_delete)
+        # Improved iPad detection: consider modern iPadOS which reports Mac-like UA
+        script = f"""
 <script>
 (function() {{
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-  if (!isIOS) {{
-    return;
-  }}
-  const parentDoc = (window.parent || window).document;
-  const setCookie = (name, value) => {{
-    const expires = new Date(Date.now() + 31536000000).toUTCString();
-    let cookie = encodeURIComponent(name) + '=' + encodeURIComponent(value);
-    cookie += '; expires=' + expires + '; path=/;';
-    if (window.location.protocol === 'https:') {{
-      cookie += ' Secure; SameSite=None;';
-    }} else {{
-      cookie += ' SameSite=Lax;';
+    // Detect iOS / iPadOS more reliably:
+    const ua = navigator.userAgent || '';
+    const isIOS = /iPhone|iPod/.test(ua);
+    // Newer iPadOS may report as Mac; detect by platform + touch support
+    const isIpadOS = (navigator.platform === 'MacIntel' && navigator.maxTouchPoints && navigator.maxTouchPoints > 1) || /iPad/.test(ua);
+    if (!isIOS && !isIpadOS) {{
+        return;
     }}
-    parentDoc.cookie = cookie;
-  }};
-  const deleteCookie = (name) => {{
-    let cookie = encodeURIComponent(name) + '=; max-age=0; path=/;';
-    if (window.location.protocol === 'https:') {{
-      cookie += ' Secure; SameSite=None;';
-    }} else {{
-      cookie += ' SameSite=Lax;';
-    }}
-    parentDoc.cookie = cookie;
-  }};
-  const cookies = {js_cookies};
-  const deleteKeys = {js_delete};
-  Object.entries(cookies).forEach(([name, value]) => setCookie(name, value));
-  deleteKeys.forEach((name) => deleteCookie(name));
+    const parentDoc = (window.parent || window).document;
+    const setCookie = (name, value) => {{
+        const expires = new Date(Date.now() + 31536000000).toUTCString();
+        let cookie = encodeURIComponent(name) + '=' + encodeURIComponent(value);
+        cookie += '; expires=' + expires + '; path=/;';
+        try {{
+            // Prefer secure cookies when on https
+            if (window.location.protocol === 'https:') {{
+                cookie += ' Secure; SameSite=None;';
+            }} else {{
+                cookie += ' SameSite=Lax;';
+            }}
+        }} catch (e) {{
+            cookie += ' SameSite=Lax;';
+        }}
+        try {{ parentDoc.cookie = cookie; }} catch (e) {{}}
+    }};
+    const deleteCookie = (name) => {{
+        let cookie = encodeURIComponent(name) + '=; max-age=0; path=/;';
+        try {{
+            if (window.location.protocol === 'https:') {{
+                cookie += ' Secure; SameSite=None;';
+            }} else {{
+                cookie += ' SameSite=Lax;';
+            }}
+        }} catch (e) {{
+            cookie += ' SameSite=Lax;';
+        }}
+        try {{ parentDoc.cookie = cookie; }} catch (e) {{}}
+    }};
+    const cookies = {js_cookies};
+    const deleteKeys = {js_delete};
+    Object.entries(cookies).forEach(([name, value]) => setCookie(name, value));
+    deleteKeys.forEach((name) => deleteCookie(name));
 }})();
 </script>
 """
-    components.html(script, height=0)
+        components.html(script, height=0)
 
 # 🚀 終極網路引擎：企業級 HTTP Session 連線池 (搭配 RoyaleAPI Proxy)
 # 建立一個全局共享的 Session，讓所有執行緒共用 TCP 連線，模擬真實瀏覽器的 Keep-Alive 行為
@@ -1030,6 +1044,12 @@ def render_scraper(sidebar=None):
         )
         if len(valid_keys) == 0:
             st.warning("請先於首頁輸入至少一組有效的 Brawl Stars API Key。")
+
+    # 與 render_bp 相同的流程：若沒有有效的 API Key，停止主頁面渲染以避免殘留閃爍
+    valid_keys_main = [k for k in st.session_state.get("bs_api_keys", []) if k]
+    if not valid_keys_main:
+        st.info("👈 請先前往首頁大廳輸入至少一組 Brawl Stars API Key，然後再回來啟動收割機。")
+        st.stop()
 
     col1, col2, col3 = st.columns(3)
     with col1:
