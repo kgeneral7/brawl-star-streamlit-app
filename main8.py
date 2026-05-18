@@ -225,7 +225,8 @@ if not st.session_state.authenticated:
                         pass
                 st.success("✅ 密碼正確，系統解鎖中...")
                 time.sleep(0.5)
-                st.rerun()
+                if st.session_state.get("current_page") == "🚀 排位數據收割機":
+                    st.rerun()
             else:
                 st.error("❌ 密碼錯誤，拒絕存取！")
     st.stop()
@@ -1111,7 +1112,8 @@ def render_scraper(sidebar=None):
             type="primary",
         ):
             st.session_state.is_running = False
-            st.rerun()
+            if st.session_state.get("current_page") == "🚀 排位數據收割機":
+                st.rerun()
     with col3:
         if st.button(
             "🗑️ 清除日誌與資料",
@@ -1122,7 +1124,8 @@ def render_scraper(sidebar=None):
             st.session_state.rooms_data = []
             st.session_state.solo_data = []
             st.session_state.solo_stats.clear()
-            st.rerun()
+            if st.session_state.get("current_page") == "🚀 排位數據收割機":
+                st.rerun()
 
     st.divider()
 
@@ -1133,7 +1136,8 @@ def render_scraper(sidebar=None):
         st.code("\n".join(st.session_state.logs[-25:]), language="plaintext")
         st.info("⏱️ 系統每 3 秒自動更新目前狀態。")
         time.sleep(3)
-        st.rerun()
+        if st.session_state.get("current_page") == "🚀 排位數據收割機":
+            st.rerun()
 
     elif not st.session_state.is_running and st.session_state.logs:
         st.markdown("### 📝 上次執行日誌")
@@ -1431,6 +1435,8 @@ page = sidebar.radio(
     "前往", ["🏠 首頁大廳", "🚀 排位數據收割機", "🤖 BP 即時戰術指示器"]
 )
 sidebar.divider()
+
+st.session_state.current_page = page
 
 if page == "🏠 首頁大廳":
     render_home()
