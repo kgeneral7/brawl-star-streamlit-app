@@ -1412,6 +1412,7 @@ page = sidebar.radio(
 )
 sidebar.divider()
 sidebar_page = sidebar.empty()
+sidebar_page.empty()
 main_page = st.container()
 
 with main_page:
