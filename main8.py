@@ -1086,6 +1086,7 @@ def render_scraper(sidebar=None):
                 st.session_state.export_filename = (
                     f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
                 )
+                st.session_state.download_ready = False
 
                 log_message(f"🔑 使用 {len(keys)} 組 API Key，啟動 {st.session_state.worker_count} 個 worker。")
                 # 建立每個 API key 的 session 清單，讓每個 worker 使用不同 key
@@ -1445,6 +1446,6 @@ with main_placeholder.container():
     if page == "🏠 首頁大廳":
         render_home()
     elif page == "🚀 排位數據收割機":
-        render_scraper()
+        render_scraper(sidebar)
     elif page == "🤖 BP 即時戰術指示器":
-        render_bp()
+        render_bp(sidebar)
