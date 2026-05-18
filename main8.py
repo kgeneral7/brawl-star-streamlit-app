@@ -1438,9 +1438,13 @@ sidebar.divider()
 
 st.session_state.current_page = page
 
-if page == "🏠 首頁大廳":
-    render_home()
-elif page == "🚀 排位數據收割機":
-    render_scraper()
-elif page == "🤖 BP 即時戰術指示器":
-    render_bp()
+main_placeholder = st.empty()
+# 清空舊的主內容，確保切換時不會殘留先前頁面的元素
+main_placeholder.empty()
+with main_placeholder.container():
+    if page == "🏠 首頁大廳":
+        render_home()
+    elif page == "🚀 排位數據收割機":
+        render_scraper()
+    elif page == "🤖 BP 即時戰術指示器":
+        render_bp()
