@@ -1411,9 +1411,13 @@ page = sidebar.radio(
     "前往", ["🏠 首頁大廳", "🚀 排位數據收割機", "🤖 BP 即時戰術指示器"]
 )
 sidebar.divider()
-if page == "🏠 首頁大廳":
-    render_home()
-elif page == "🚀 排位數據收割機":
-    render_scraper(sidebar)
-elif page == "🤖 BP 即時戰術指示器":
-    render_bp(sidebar)
+sidebar_page = sidebar.empty()
+main_page = st.container()
+
+with main_page:
+    if page == "🏠 首頁大廳":
+        render_home()
+    elif page == "🚀 排位數據收割機":
+        render_scraper(sidebar_page)
+    elif page == "🤖 BP 即時戰術指示器":
+        render_bp(sidebar_page)
