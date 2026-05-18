@@ -221,8 +221,7 @@ if not st.session_state.authenticated:
                         pass
                 st.success("✅ 密碼正確，系統解鎖中...")
                 time.sleep(0.5)
-                if st.session_state.get("current_page") == "🚀 排位數據收割機":
-                    st.rerun()
+                st.rerun()
             else:
                 st.error("❌ 密碼錯誤，拒絕存取！")
     st.stop()
