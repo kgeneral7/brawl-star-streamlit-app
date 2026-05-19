@@ -870,7 +870,7 @@ def render_home():
                     delete_requested = True
 
         if delete_requested:
-            st.experimental_rerun()
+            st.rerun()
 
         if st.button("➕ 新增 API Key", use_container_width=True, key="add_bs_key"):
             current_keys = [
@@ -879,7 +879,7 @@ def render_home():
             ]
             current_keys.append("")
             st.session_state.bs_api_keys = current_keys
-            st.experimental_rerun()
+            st.rerun()
 
         rendered_len = len(st.session_state.get("bs_api_keys", []) or keys)
         updated_keys = [
