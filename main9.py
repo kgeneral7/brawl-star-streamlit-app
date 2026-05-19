@@ -845,6 +845,7 @@ def render_home():
         # 動態渲染每一個 key 欄位，並提供新增/刪除按鈕
         keys = st.session_state.get("bs_api_keys", []) or [""]
         st.markdown("**🔑 已輸入的 API Keys**")
+        delete_requested = False
         for i in range(len(keys)):
             c1, c2 = st.columns([9, 1])
             with c1:
@@ -860,9 +861,16 @@ def render_home():
                         for j in range(len(keys))
                         if j != i
                     ]
-                    st.session_state.bs_api_keys = [k for k in current_keys if k]
-                    if f"bs_key_{i}" in st.session_state:
-                        del st.session_state[f"bs_key_{i}"]
+                    new_keys = [k for k in current_keys if k]
+                    st.session_state.bs_api_keys = new_keys
+                    for j in range(len(keys)):
+                        keyname = f"bs_key_{j}"
+                        if keyname in st.session_state and j >= len(new_keys):
+                            del st.session_state[keyname]
+                    delete_requested = True
+
+        if delete_requested:
+            st.experimental_rerun()
 
         if st.button("➕ 新增 API Key", use_container_width=True, key="add_bs_key"):
             current_keys = [
@@ -871,10 +879,12 @@ def render_home():
             ]
             current_keys.append("")
             st.session_state.bs_api_keys = current_keys
+            st.experimental_rerun()
 
+        rendered_len = len(st.session_state.get("bs_api_keys", []) or keys)
         updated_keys = [
             st.session_state.get(f"bs_key_{i}", "").strip()
-            for i in range(len(keys))
+            for i in range(rendered_len)
         ]
         if updated_keys != st.session_state.get("bs_api_keys", []):
             st.session_state.bs_api_keys = updated_keys or [""]
