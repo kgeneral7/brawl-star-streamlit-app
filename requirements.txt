@@ -2,3 +2,4 @@ streamlit
 requests
 python-dotenv
 streamlit-cookies-manager
+streamlit-autorefresh
