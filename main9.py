@@ -17,7 +17,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
 from streamlit_cookies_manager import CookieManager
-
+from streamlit_autorefresh import st_autorefresh
 # 🌟 全域防護鎖 (保護跨執行緒共享的變數)
 GLOBAL_LOCK = threading.Lock()
 
