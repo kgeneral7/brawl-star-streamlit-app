@@ -300,6 +300,10 @@ if "worker_count" not in st.session_state:
     st.session_state.worker_count = 4
 if "export_filename" not in st.session_state:
     st.session_state.export_filename = "brawl_data"
+if "auto_refresh_logs" not in st.session_state:
+    st.session_state.auto_refresh_logs = True
+if "auto_refresh_interval" not in st.session_state:
+    st.session_state.auto_refresh_interval = 3
 
 if "condensed_data" not in st.session_state:
     st.session_state.condensed_data = {}
@@ -1045,6 +1049,24 @@ def render_scraper(sidebar=None):
                 disabled=len(valid_keys) == 0,
             )
         st.session_state.worker_count = w_count
+
+        st.divider()
+        st.header("🔔 日誌自動刷新")
+        st.session_state.auto_refresh_logs = st.checkbox(
+            "📡 啟用自動刷新日誌",
+            value=st.session_state.auto_refresh_logs,
+            key="auto_refresh_logs",
+        )
+        st.session_state.auto_refresh_interval = st.slider(
+            "⏱️ 日誌刷新間隔 (秒)",
+            min_value=1,
+            max_value=10,
+            value=st.session_state.auto_refresh_interval,
+            key="auto_refresh_interval",
+        )
+        st.caption(
+            "自動刷新僅在收割機運行時啟用，將自動更新最新日誌內容。"
+        )
         st.caption(
             "🛡️ 核心數上限已限制為目前有效 API Key 的數量。"
         )
@@ -1140,7 +1162,16 @@ def render_scraper(sidebar=None):
             f"🔄 **多核心收割陣列全速運作中...** (目前有 {st.session_state.active_tasks} 個核心正在背景狂飆！)"
         )
         st.code("\n".join(st.session_state.logs[-25:]), language="plaintext")
-        st.info("⏱️ 收割機正在運行中，請使用右側按鈕手動刷新或切換頁面。")
+        if st.session_state.auto_refresh_logs:
+            st_autorefresh(
+                interval=st.session_state.auto_refresh_interval * 1000,
+                key="log_auto_refresh",
+            )
+            st.success(
+                f"✅ 日誌自動刷新已啟動，每 {st.session_state.auto_refresh_interval} 秒更新一次。"
+            )
+        else:
+            st.info("⏱️ 日誌自動刷新已關閉，請使用右側按鈕手動刷新或切換頁面。")
 
     elif not st.session_state.is_running and st.session_state.logs:
         st.markdown("### 📝 上次執行日誌")
