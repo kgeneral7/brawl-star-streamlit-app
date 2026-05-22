@@ -17,7 +17,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
 from streamlit_cookies_manager import CookieManager
-
+from streamlit_autorefresh import st_autorefresh
 # 🌟 全域防護鎖 (保護跨執行緒共享的變數)
 GLOBAL_LOCK = threading.Lock()
 
@@ -1052,12 +1052,12 @@ def render_scraper(sidebar=None):
 
         st.divider()
         st.header("🔔 日誌自動刷新")
-        st.session_state.auto_refresh_logs = st.checkbox(
+        st.checkbox(
             "📡 啟用自動刷新日誌",
             value=st.session_state.auto_refresh_logs,
             key="auto_refresh_logs",
         )
-        st.session_state.auto_refresh_interval = st.slider(
+        st.slider(
             "⏱️ 日誌刷新間隔 (秒)",
             min_value=1,
             max_value=10,
