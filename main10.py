@@ -1067,18 +1067,21 @@ def render_scraper(sidebar=None):
 
         st.divider()
         st.header("🔔 日誌自動刷新")
-        st.checkbox(
+
+        # 改用變數接住回傳值，並手動存入 session_state，避免元件銷毀時被清除
+        auto_refresh = st.checkbox(
             "📡 啟用自動刷新日誌",
             value=st.session_state.auto_refresh_logs,
-            key="auto_refresh_logs",
         )
-        st.slider(
+        st.session_state.auto_refresh_logs = auto_refresh
+
+        interval = st.slider(
             "⏱️ 日誌刷新間隔 (秒)",
             min_value=1,
             max_value=10,
             value=st.session_state.auto_refresh_interval,
-            key="auto_refresh_interval",
         )
+        st.session_state.auto_refresh_interval = interval
         st.caption("自動刷新僅在收割機運行時啟用，將自動更新最新日誌內容。")
         st.caption("🛡️ 核心數上限已限制為目前有效 API Key 的數量。")
         if len(valid_keys) == 0:
