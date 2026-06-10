@@ -18,6 +18,7 @@ import streamlit.components.v1 as components
 from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
 from streamlit_cookies_manager import CookieManager
 from streamlit_autorefresh import st_autorefresh
+
 # 🌟 全域防護鎖 (保護跨執行緒共享的變數)
 GLOBAL_LOCK = threading.Lock()
 
@@ -44,7 +45,9 @@ def parse_saved_bs_api_keys(raw_keys):
     except Exception:
         pass
     try:
-        return [k.strip() for k in raw_keys.replace(",", "\n").splitlines() if k.strip()]
+        return [
+            k.strip() for k in raw_keys.replace(",", "\n").splitlines() if k.strip()
+        ]
     except Exception:
         return []
 
@@ -103,6 +106,7 @@ def ios_cookie_fallback(cookies_to_set: dict = None, cookies_to_delete: list = N
 """
     components.html(script, height=0)
 
+
 # 🚀 終極網路引擎：企業級 HTTP Session 連線池 (搭配 RoyaleAPI Proxy)
 # 建立一個全局共享的 Session，讓所有執行緒共用 TCP 連線，模擬真實瀏覽器的 Keep-Alive 行為
 HTTP_SESSION = requests.Session()
@@ -122,11 +126,13 @@ def create_http_session(api_key: str):
     s.mount("https://", adapter)
     s.mount("http://", adapter)
     if api_key:
-        s.headers.update({
-            "Authorization": f"Bearer {api_key}",
-            "Accept": "application/json",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        })
+        s.headers.update(
+            {
+                "Authorization": f"Bearer {api_key}",
+                "Accept": "application/json",
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            }
+        )
     return s
 
 
@@ -139,6 +145,7 @@ def get_session_for_worker(worker_id: int):
     except Exception:
         pass
     return HTTP_SESSION
+
 
 # ================= 網頁基本設定 =================
 st.set_page_config(page_title="👑荒野戰術大廳", layout="wide", page_icon="🏆")
@@ -263,9 +270,13 @@ if "bs_api_keys" not in st.session_state:
         if keys:
             st.session_state.bs_api_keys = keys
         else:
-            st.session_state.bs_api_keys = [st.session_state.bs_api_key] if st.session_state.bs_api_key else []
+            st.session_state.bs_api_keys = (
+                [st.session_state.bs_api_key] if st.session_state.bs_api_key else []
+            )
     except Exception:
-        st.session_state.bs_api_keys = [st.session_state.bs_api_key] if st.session_state.bs_api_key else []
+        st.session_state.bs_api_keys = (
+            [st.session_state.bs_api_key] if st.session_state.bs_api_key else []
+        )
 
 if "gemini_api_key" not in st.session_state:
     if cookies is not None:
@@ -887,8 +898,7 @@ def render_home():
 
         rendered_len = len(st.session_state.get("bs_api_keys", []) or keys)
         updated_keys = [
-            st.session_state.get(f"bs_key_{i}", "").strip()
-            for i in range(rendered_len)
+            st.session_state.get(f"bs_key_{i}", "").strip() for i in range(rendered_len)
         ]
         if updated_keys != st.session_state.get("bs_api_keys", []):
             st.session_state.bs_api_keys = updated_keys or [""]
@@ -901,10 +911,13 @@ def render_home():
                         cookies["bs_api_keys"] = json.dumps(valid_keys)
                         cookies["bs_api_key"] = valid_keys[0]
                         cookies.save()
-                        ios_cookie_fallback({
-                            "bs_api_keys": json.dumps(valid_keys),
-                            "bs_api_key": valid_keys[0],
-                        }, [])
+                        ios_cookie_fallback(
+                            {
+                                "bs_api_keys": json.dumps(valid_keys),
+                                "bs_api_key": valid_keys[0],
+                            },
+                            [],
+                        )
                     else:
                         if "bs_api_keys" in cookies:
                             cookies["bs_api_keys"] = None
@@ -965,7 +978,9 @@ def render_home():
                     if save_gemini_key:
                         cookies["gemini_api_key"] = st.session_state.gemini_api_key
                         cookies.save()
-                        ios_cookie_fallback({"gemini_api_key": st.session_state.gemini_api_key}, [])
+                        ios_cookie_fallback(
+                            {"gemini_api_key": st.session_state.gemini_api_key}, []
+                        )
                     else:
                         # 取消保存時清除 Cookie
                         if "gemini_api_key" in cookies:
@@ -1052,31 +1067,32 @@ def render_scraper(sidebar=None):
 
         st.divider()
         st.header("🔔 日誌自動刷新")
-        st.checkbox(
+
+        # 改用變數接住回傳值，並手動存入 session_state，避免元件銷毀時被清除
+        auto_refresh = st.checkbox(
             "📡 啟用自動刷新日誌",
             value=st.session_state.auto_refresh_logs,
-            key="auto_refresh_logs",
         )
-        st.slider(
+        st.session_state.auto_refresh_logs = auto_refresh
+
+        interval = st.slider(
             "⏱️ 日誌刷新間隔 (秒)",
             min_value=1,
             max_value=10,
             value=st.session_state.auto_refresh_interval,
-            key="auto_refresh_interval",
         )
-        st.caption(
-            "自動刷新僅在收割機運行時啟用，將自動更新最新日誌內容。"
-        )
-        st.caption(
-            "🛡️ 核心數上限已限制為目前有效 API Key 的數量。"
-        )
+        st.session_state.auto_refresh_interval = interval
+        st.caption("自動刷新僅在收割機運行時啟用，將自動更新最新日誌內容。")
+        st.caption("🛡️ 核心數上限已限制為目前有效 API Key 的數量。")
         if len(valid_keys) == 0:
             st.warning("請先於首頁輸入至少一組有效的 Brawl Stars API Key。")
 
     # 與 render_bp 相同的流程：若沒有有效的 API Key，停止主頁面渲染以避免殘留閃爍
     valid_keys_main = [k for k in st.session_state.get("bs_api_keys", []) if k]
     if not valid_keys_main:
-        st.info("👈 請先前往首頁大廳輸入至少一組 Brawl Stars API Key，然後再回來啟動收割機。")
+        st.info(
+            "👈 請先前往首頁大廳輸入至少一組 Brawl Stars API Key，然後再回來啟動收割機。"
+        )
         st.stop()
 
     col1, col2, col3 = st.columns(3)
@@ -1115,10 +1131,14 @@ def render_scraper(sidebar=None):
                 )
                 st.session_state.download_ready = False
 
-                log_message(f"🔑 使用 {len(keys)} 組 API Key，啟動 {st.session_state.worker_count} 個 worker。")
+                log_message(
+                    f"🔑 使用 {len(keys)} 組 API Key，啟動 {st.session_state.worker_count} 個 worker。"
+                )
                 # 建立每個 API key 的 session 清單，讓每個 worker 使用不同 key
                 st.session_state.bs_api_keys = raw_keys
-                st.session_state.http_sessions = [create_http_session(k) for k in keys[:16]]
+                st.session_state.http_sessions = [
+                    create_http_session(k) for k in keys[:16]
+                ]
 
                 ctx = get_script_run_ctx()
 
