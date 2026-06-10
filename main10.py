@@ -179,7 +179,7 @@ if "authenticated" not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
-    st.title("🔒 K将軍 戰術大廳 - 系統鎖定")
+    st.title("🔒  戰術大廳 - 系統鎖定")
     st.markdown("請輸入專屬密碼以啟動系統核心。")
 
     # 🍪 嘗試從 Cookie 讀取已保存的密碼
@@ -837,7 +837,7 @@ def process_multiple_csv_files(uploaded_files):
 
 # ================= 3. 各頁面渲染模組 =================
 def render_home():
-    st.title("🏆 K将軍 荒野亂鬥戰術大廳")
+    st.title("🏆 荒野亂鬥戰術大廳")
     st.markdown("歡迎來到終極戰術大廳！")
 
     st.divider()
