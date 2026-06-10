@@ -141,7 +141,7 @@ def get_session_for_worker(worker_id: int):
     return HTTP_SESSION
 
 # ================= 網頁基本設定 =================
-st.set_page_config(page_title="👑 K将軍 荒野戰術大廳", layout="wide", page_icon="🏆")
+st.set_page_config(page_title="👑荒野戰術大廳", layout="wide", page_icon="🏆")
 
 # ================= 初始化 Cookie 管理器 (強化版) =================
 import time as time_module
@@ -1234,7 +1234,7 @@ def render_scraper(sidebar=None):
 
 
 def render_bp(sidebar=None):
-    st.title("🤖 K将軍 BP 即時戰術指示器")
+    st.title("🤖 BP 即時戰術指示器")
     sidebar = sidebar if sidebar is not None else st.sidebar
     with sidebar:
         st.header("📂 數據庫載入")
