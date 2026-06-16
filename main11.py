@@ -851,16 +851,70 @@ def render_home():
     col1, col2 = st.columns(2)
     with col1:
         st.info("⚙️ **排位收割機狀態**")
+    # ================= 從這裡開始替換 =================
         save_bs_key = st.checkbox(
             "💾 記住 Brawl Stars API Key(s) (Cookie 存儲)",
             value=bool(st.session_state.get("bs_api_keys")),
             key="save_bs_checkbox",
         )
 
-        # 動態渲染每一個 key 欄位，並提供新增/刪除按鈕
-        keys = st.session_state.get("bs_api_keys", []) or [""]
+        keys = st.session_state.get("bs_api_keys", [])
+        if not keys:
+            keys = [""]
+
         st.markdown("**🔑 已輸入的 API Keys**")
-        delete_requested = False
+
+        # 核心函式：同步 Cookie 狀態
+        def save_keys_to_cookie(valid_keys):
+            if cookies is not None:
+                # 由於 Callback 執行時主程式尚未跑到 checkbox，需從 session_state 取值
+                should_save = st.session_state.get("save_bs_checkbox", False)
+                try:
+                    if should_save and valid_keys:
+                        cookies["bs_api_keys"] = json.dumps(valid_keys)
+                        cookies["bs_api_key"] = valid_keys[0]
+                        cookies.save()
+                        ios_cookie_fallback({"bs_api_keys": json.dumps(valid_keys), "bs_api_key": valid_keys[0]}, [])
+                    else:
+                        if "bs_api_keys" in cookies: cookies["bs_api_keys"] = None
+                        if "bs_api_key" in cookies: cookies["bs_api_key"] = None
+                        cookies.save()
+                        ios_cookie_fallback({}, ["bs_api_keys", "bs_api_key"])
+                except Exception:
+                    pass
+
+        # 核心函式：強制同步狀態並清除幽靈 Widget 快取
+        def sync_state_and_cookies(new_keys):
+            st.session_state.bs_api_keys = new_keys
+            valid_keys = [k for k in new_keys if k.strip()]
+            st.session_state.bs_api_key = valid_keys[0] if valid_keys else ""
+            
+            # 關鍵修復：把所有跟 key 欄位有關的底層暫存全部砍掉，強迫 Streamlit 讀取新值
+            for k in list(st.session_state.keys()):
+                if k.startswith("bs_key_"):
+                    del st.session_state[k]
+                    
+            save_keys_to_cookie(valid_keys)
+
+        # 定義按鈕與輸入框的 Callback 操作
+        def add_key_action():
+            ks = [st.session_state.get(f"bs_key_{i}", "").strip() for i in range(len(st.session_state.get("bs_api_keys", [""])))]
+            ks.append("")
+            sync_state_and_cookies(ks)
+
+        def remove_key_action(idx):
+            ks = [st.session_state.get(f"bs_key_{i}", "").strip() for i in range(len(st.session_state.get("bs_api_keys", [""])))]
+            if len(ks) > 1:
+                ks.pop(idx)
+            else:
+                ks[0] = "" # 若全部刪光，至少保留一格空白讓使用者輸入
+            sync_state_and_cookies(ks)
+
+        def update_text_action():
+            ks = [st.session_state.get(f"bs_key_{i}", "").strip() for i in range(len(st.session_state.get("bs_api_keys", [""])))]
+            sync_state_and_cookies(ks)
+
+        # 動態渲染 UI
         for i in range(len(keys)):
             c1, c2 = st.columns([9, 1])
             with c1:
@@ -868,101 +922,18 @@ def render_home():
                     label=f"Key #{i+1}",
                     value=keys[i],
                     key=f"bs_key_{i}",
+                    on_change=update_text_action
                 )
             with c2:
-                    if st.button("刪除", key=f"rm_key_{i}"):
-                        # 直接從 session_state 的 keys 刪除指定索引，避免 widget 與狀態不同步
-                        try:
-                            ks = st.session_state.get("bs_api_keys", []) or []
-                            if i < len(ks):
-                                ks.pop(i)
-                            st.session_state.bs_api_keys = ks
-                            # 更新/刪除對應的動態 text_input 狀態
-                            for j in range(0, 32):
-                                kname = f"bs_key_{j}"
-                                if kname in st.session_state:
-                                    if j >= len(ks):
-                                        try:
-                                            del st.session_state[kname]
-                                        except Exception:
-                                            pass
-                                    else:
-                                        st.session_state[kname] = ks[j]
-                            # 同步更新 cookies（若有）
-                            if cookies is not None:
-                                try:
-                                    if ks:
-                                        cookies["bs_api_keys"] = json.dumps(ks)
-                                        cookies["bs_api_key"] = ks[0]
-                                    else:
-                                        try:
-                                            del cookies["bs_api_keys"]
-                                        except Exception:
-                                            cookies["bs_api_keys"] = None
-                                        try:
-                                            del cookies["bs_api_key"]
-                                        except Exception:
-                                            cookies["bs_api_key"] = None
-                                    cookies.save()
-                                    try:
-                                        ios_cookie_fallback(
-                                            {"bs_api_keys": json.dumps(ks), "bs_api_key": ks[0]} if ks else {},
-                                            [] if ks else ["bs_api_keys", "bs_api_key"],
-                                        )
-                                    except Exception:
-                                        pass
-                                except Exception:
-                                    pass
-                        except Exception:
-                            pass
-                        delete_requested = True
+                # 加上一點 CSS Margin 讓刪除按鈕跟輸入框水平對齊
+                st.markdown("<div style='margin-top: 28px;'></div>", unsafe_allow_html=True)
+                st.button("刪除", key=f"rm_key_{i}", on_click=remove_key_action, args=(i,), use_container_width=True)
 
-        if delete_requested:
-            st.rerun()
+        st.button("➕ 新增 API Key", use_container_width=True, key="add_bs_key", on_click=add_key_action)
 
-        if st.button("➕ 新增 API Key", use_container_width=True, key="add_bs_key"):
-            current_keys = [
-                st.session_state.get(f"bs_key_{j}", "").strip()
-                for j in range(len(keys))
-            ]
-            current_keys.append("")
-            st.session_state.bs_api_keys = current_keys
-            st.rerun()
-
-        rendered_len = len(st.session_state.get("bs_api_keys", []) or keys)
-        updated_keys = [
-            st.session_state.get(f"bs_key_{i}", "").strip() for i in range(rendered_len)
-        ]
-        if updated_keys != st.session_state.get("bs_api_keys", []):
-            st.session_state.bs_api_keys = updated_keys or [""]
-            valid_keys = [k for k in updated_keys if k]
-            st.session_state.bs_api_key = valid_keys[0] if valid_keys else ""
-            duplicate_keys = [k for k in valid_keys if valid_keys.count(k) > 1]
-            if cookies is not None and not duplicate_keys:
-                try:
-                    if save_bs_key and valid_keys:
-                        cookies["bs_api_keys"] = json.dumps(valid_keys)
-                        cookies["bs_api_key"] = valid_keys[0]
-                        cookies.save()
-                        ios_cookie_fallback(
-                            {
-                                "bs_api_keys": json.dumps(valid_keys),
-                                "bs_api_key": valid_keys[0],
-                            },
-                            [],
-                        )
-                    else:
-                        if "bs_api_keys" in cookies:
-                            cookies["bs_api_keys"] = None
-                        if "bs_api_key" in cookies:
-                            cookies["bs_api_key"] = None
-                        cookies.save()
-                        ios_cookie_fallback({}, ["bs_api_keys", "bs_api_key"])
-                except Exception as e:
-                    st.warning(f"⚠️ 無法保存到 Cookie: {str(e)}")
-
-        valid_keys = [k for k in st.session_state.get("bs_api_keys", []) if k]
+        valid_keys = [k for k in st.session_state.get("bs_api_keys", []) if k.strip()]
         duplicate_keys = [k for k in valid_keys if valid_keys.count(k) > 1]
+        # ================= 替換到這裡為止 =================
         if valid_keys:
             st.success(
                 f"✅ 已輸入 {len(valid_keys)} 組 Brawl Stars Key(s)（含 {len(st.session_state.get('bs_api_keys', [])) - len(valid_keys)} 組空白欄位）"
