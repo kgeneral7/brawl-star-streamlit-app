@@ -943,14 +943,41 @@ def render_home():
             if cookies is not None:
                 try:
                     if "bs_api_keys" in cookies:
-                        cookies["bs_api_keys"] = None
+                        # 優先使用 del 嘗試移除，以確保 CookieManager 真正刪除鍵
+                        try:
+                            del cookies["bs_api_keys"]
+                        except Exception:
+                            cookies["bs_api_keys"] = None
                     if "bs_api_key" in cookies:
-                        cookies["bs_api_key"] = None
+                        try:
+                            del cookies["bs_api_key"]
+                        except Exception:
+                            cookies["bs_api_key"] = None
                     cookies.save()
                     # 為 iOS 瀏覽器提供回退，確保 iframe/特殊環境也能同步清除
                     try:
                         ios_cookie_fallback({}, ["bs_api_keys", "bs_api_key"])
                     except:
+                        pass
+                    # 通用前端刪除 cookie（覆蓋所有瀏覽器），並嘗試刪除 localStorage 條目
+                    try:
+                        del_script = '''
+<script>
+(function(){
+  try{
+    const names = ['bs_api_keys','bs_api_key'];
+    const parentDoc = (function(){ try{ if(window.parent && window.parent.document) return window.parent.document;}catch(e){} return document; })();
+    names.forEach(n=>{
+      try{ parentDoc.cookie = encodeURIComponent(n) + '=; max-age=0; path=/;'; }catch(e){}
+      try{ document.cookie = encodeURIComponent(n) + '=; max-age=0; path=/;'; }catch(e){}
+      try{ localStorage.removeItem(n); }catch(e){}
+    });
+  }catch(e){}
+})();
+</script>
+'''
+                        components.html(del_script, height=0)
+                    except Exception:
                         pass
                 except:
                     pass
