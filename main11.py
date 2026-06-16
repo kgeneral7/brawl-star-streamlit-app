@@ -870,19 +870,52 @@ def render_home():
                     key=f"bs_key_{i}",
                 )
             with c2:
-                if st.button("刪除", key=f"rm_key_{i}"):
-                    current_keys = [
-                        st.session_state.get(f"bs_key_{j}", "").strip()
-                        for j in range(len(keys))
-                        if j != i
-                    ]
-                    new_keys = [k for k in current_keys if k]
-                    st.session_state.bs_api_keys = new_keys
-                    for j in range(len(keys)):
-                        keyname = f"bs_key_{j}"
-                        if keyname in st.session_state and j >= len(new_keys):
-                            del st.session_state[keyname]
-                    delete_requested = True
+                    if st.button("刪除", key=f"rm_key_{i}"):
+                        # 直接從 session_state 的 keys 刪除指定索引，避免 widget 與狀態不同步
+                        try:
+                            ks = st.session_state.get("bs_api_keys", []) or []
+                            if i < len(ks):
+                                ks.pop(i)
+                            st.session_state.bs_api_keys = ks
+                            # 更新/刪除對應的動態 text_input 狀態
+                            for j in range(0, 32):
+                                kname = f"bs_key_{j}"
+                                if kname in st.session_state:
+                                    if j >= len(ks):
+                                        try:
+                                            del st.session_state[kname]
+                                        except Exception:
+                                            pass
+                                    else:
+                                        st.session_state[kname] = ks[j]
+                            # 同步更新 cookies（若有）
+                            if cookies is not None:
+                                try:
+                                    if ks:
+                                        cookies["bs_api_keys"] = json.dumps(ks)
+                                        cookies["bs_api_key"] = ks[0]
+                                    else:
+                                        try:
+                                            del cookies["bs_api_keys"]
+                                        except Exception:
+                                            cookies["bs_api_keys"] = None
+                                        try:
+                                            del cookies["bs_api_key"]
+                                        except Exception:
+                                            cookies["bs_api_key"] = None
+                                    cookies.save()
+                                    try:
+                                        ios_cookie_fallback(
+                                            {"bs_api_keys": json.dumps(ks), "bs_api_key": ks[0]} if ks else {},
+                                            [] if ks else ["bs_api_keys", "bs_api_key"],
+                                        )
+                                    except Exception:
+                                        pass
+                                except Exception:
+                                    pass
+                        except Exception:
+                            pass
+                        delete_requested = True
 
         if delete_requested:
             st.rerun()
